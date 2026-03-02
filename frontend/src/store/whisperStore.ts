@@ -80,7 +80,7 @@ export function reduceWhisperState(
     return state;
   }
 
-  const nextSeen = { ...state.seenEventIds, [envelope.eventId]: true };
+  const nextSeen: Record<string, true> = { ...state.seenEventIds, [envelope.eventId]: true };
   let nextWhispers = { ...state.whispers };
   let nextSpotlight = state.spotlightIdentity;
 

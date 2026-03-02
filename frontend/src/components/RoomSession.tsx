@@ -198,14 +198,14 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
     return () => {
       cancelled = true;
-      if (cameraPubRef.current) {
-        void lkRoom.localParticipant.unpublishTrack(cameraPubRef.current.track);
+      if (cameraPubRef.current && cameraTrackRef.current) {
+        void lkRoom.localParticipant.unpublishTrack(cameraTrackRef.current);
       }
-      if (whisperPubRef.current) {
-        void lkRoom.localParticipant.unpublishTrack(whisperPubRef.current.track);
+      if (whisperPubRef.current && whisperTrackRef.current) {
+        void lkRoom.localParticipant.unpublishTrack(whisperTrackRef.current);
       }
-      if (mainPubRef.current) {
-        void lkRoom.localParticipant.unpublishTrack(mainPubRef.current.track);
+      if (mainPubRef.current && mainTrackRef.current) {
+        void lkRoom.localParticipant.unpublishTrack(mainTrackRef.current);
       }
 
       cameraTrackRef.current?.stop();
@@ -354,7 +354,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       }
 
       if (whisperPubRef.current && whisperTrackRef.current) {
-        await room.localParticipant.unpublishTrack(whisperPubRef.current.track);
+        await room.localParticipant.unpublishTrack(whisperTrackRef.current);
         whisperTrackRef.current.stop();
       }
 
@@ -379,7 +379,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
     const cleanup = async () => {
       if (whisperPubRef.current && whisperTrackRef.current) {
-        await room.localParticipant.unpublishTrack(whisperPubRef.current.track);
+        await room.localParticipant.unpublishTrack(whisperTrackRef.current);
         whisperTrackRef.current.stop();
       }
       whisperTrackRef.current = null;
@@ -455,7 +455,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     }
 
     if (cameraTrackRef.current && cameraPubRef.current) {
-      await room.localParticipant.unpublishTrack(cameraPubRef.current.track);
+      await room.localParticipant.unpublishTrack(cameraTrackRef.current);
       cameraTrackRef.current.stop();
       cameraTrackRef.current = null;
       cameraPubRef.current = null;
@@ -603,7 +603,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     [identity, publishEnvelope]
   );
 
-  const videoTiles = useMemo(() => {
+  const videoTiles = (() => {
     if (!room) {
       return [] as VideoTile[];
     }
@@ -649,9 +649,9 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     }
 
     return tiles;
-  }, [followSpotlight, identity, renderTick, room, spotlightIdentity]);
+  })();
 
-  const audioTracks = useMemo(() => {
+  const audioTracks = (() => {
     if (!room) {
       return [] as AudioTrackItem[];
     }
@@ -672,7 +672,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     });
 
     return tracks;
-  }, [renderTick, room]);
+  })();
 
   if (isConnecting) {
     return <div className="panel">Connecting to room...</div>;
