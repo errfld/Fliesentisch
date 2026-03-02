@@ -1,0 +1,64 @@
+name: Build and Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      OWNER: ${{ github.repository_owner }}
+      SHA_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/virtual-table-auth:latest
+            ghcr.io/${{ env.OWNER }}/virtual-table-auth:${{ env.SHA_TAG }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_AUTH_URL=${{ secrets.NEXT_PUBLIC_AUTH_URL }}
+            NEXT_PUBLIC_LIVEKIT_URL=${{ secrets.NEXT_PUBLIC_LIVEKIT_URL }}
+            NEXT_PUBLIC_DEFAULT_ROOM=${{ secrets.NEXT_PUBLIC_DEFAULT_ROOM }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/virtual-table-frontend:latest
+            ghcr.io/${{ env.OWNER }}/virtual-table-frontend:${{ env.SHA_TAG }}
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.VPS_APP_DIR }}
+            export GITHUB_REPOSITORY_OWNER=${{ env.OWNER }}
+            export IMAGE_TAG=${{ env.SHA_TAG }}
+            docker compose -f infrastructure/docker-compose.vps.yml pull
+            docker compose -f infrastructure/docker-compose.vps.yml up -d --remove-orphans

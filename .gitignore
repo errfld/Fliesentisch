@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+.turbo
+.next
+coverage
+dist
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Rust
+backend/target
+
+# IDE
+.vscode
+.idea

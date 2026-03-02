@@ -1,0 +1,12 @@
+{
+  "name": "infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "docker compose -f docker-compose.yml up -d",
+    "build": "docker compose -f docker-compose.yml build",
+    "test": "docker compose -f docker-compose.yml config >/dev/null",
+    "lint": "docker compose -f docker-compose.yml config >/dev/null",
+    "typecheck": "echo 'No typecheck required for infrastructure package'"
+  }
+}
