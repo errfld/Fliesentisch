@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend_infra_checks:
+    name: frontend_infra_checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend test
+        run: pnpm --filter frontend test
+
+      - name: Frontend build
+        run: pnpm --filter frontend build
+
+      - name: Infrastructure lint
+        run: pnpm --filter infrastructure lint
+
+      - name: Infrastructure test
+        run: pnpm --filter infrastructure test
+
+  backend_checks:
+    name: backend_checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cargo fmt
+        run: cargo fmt --manifest-path backend/Cargo.toml -- --check
+
+      - name: Cargo clippy
+        run: cargo clippy --manifest-path backend/Cargo.toml --all-targets -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --manifest-path backend/Cargo.toml
+
+      - name: Cargo build
+        run: cargo build --manifest-path backend/Cargo.toml --locked
+
+  security_js:
+    name: security_js
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit (high and critical)
+        run: pnpm audit --audit-level high
+
+      - name: Dependency review (pull requests only)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  security_rust:
+    name: security_rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Cargo audit
+        run: cargo audit --file backend/Cargo.lock
+
+  merge-gate:
+    name: merge-gate
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - frontend_infra_checks
+      - backend_checks
+      - security_js
+      - security_rust
+    steps:
+      - name: Validate upstream job status
+        env:
+          FRONTEND_INFRA_RESULT: ${{ needs.frontend_infra_checks.result }}
+          BACKEND_RESULT: ${{ needs.backend_checks.result }}
+          SECURITY_JS_RESULT: ${{ needs.security_js.result }}
+          SECURITY_RUST_RESULT: ${{ needs.security_rust.result }}
+        run: |
+          test "$FRONTEND_INFRA_RESULT" = "success"
+          test "$BACKEND_RESULT" = "success"
+          test "$SECURITY_JS_RESULT" = "success"
+          test "$SECURITY_RUST_RESULT" = "success"
