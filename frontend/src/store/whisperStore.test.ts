@@ -40,6 +40,16 @@ describe("calculateMainVolume", () => {
   });
 });
 
+function whisperWithMembers(id: string, members: string[], updatedAt: number, createdAt = updatedAt): Whisper {
+  return {
+    id,
+    members,
+    createdBy: members[0] ?? "system",
+    createdAt,
+    updatedAt
+  };
+}
+
 describe("reduceWhisperState", () => {
   it("applies whisper create and deduplicates event id", () => {
     const evt = createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10));
@@ -69,12 +79,38 @@ describe("reduceWhisperState", () => {
   });
 
   it("enforces max three whispers by oldest createdAt", () => {
-    const s1 = reduceWhisperState(baseState, createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 1, 1)));
-    const s2 = reduceWhisperState(s1, createEnvelope("WHISPER_CREATE", "alice", whisper("w2", 2, 2)));
-    const s3 = reduceWhisperState(s2, createEnvelope("WHISPER_CREATE", "alice", whisper("w3", 3, 3)));
-    const s4 = reduceWhisperState(s3, createEnvelope("WHISPER_CREATE", "alice", whisper("w4", 4, 4)));
+    const s1 = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisperWithMembers("w1", ["alice", "bob"], 1, 1))
+    );
+    const s2 = reduceWhisperState(
+      s1,
+      createEnvelope("WHISPER_CREATE", "alice", whisperWithMembers("w2", ["carol", "dave"], 2, 2))
+    );
+    const s3 = reduceWhisperState(
+      s2,
+      createEnvelope("WHISPER_CREATE", "alice", whisperWithMembers("w3", ["erin", "frank"], 3, 3))
+    );
+    const s4 = reduceWhisperState(
+      s3,
+      createEnvelope("WHISPER_CREATE", "alice", whisperWithMembers("w4", ["gina", "henry"], 4, 4))
+    );
 
     expect(Object.keys(s4.whispers).sort()).toEqual(["w1", "w2", "w3"]);
+  });
+
+  it("keeps each participant in only one whisper based on most recent update", () => {
+    const s1 = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisperWithMembers("w1", ["alice", "bob"], 10))
+    );
+    const s2 = reduceWhisperState(
+      s1,
+      createEnvelope("WHISPER_CREATE", "carol", whisperWithMembers("w2", ["alice", "carol"], 20))
+    );
+
+    expect(s2.whispers.w2.members).toEqual(["alice", "carol"]);
+    expect(s2.whispers.w1).toBeUndefined();
   });
 
   it("ducks main volume when selected whisper includes local member", () => {

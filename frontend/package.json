@@ -12,7 +12,10 @@
     "test": "vitest run",
     "clients:start": "bash ./scripts/multi-clients.sh start",
     "clients:stop": "bash ./scripts/multi-clients.sh stop",
-    "clients:list": "bash ./scripts/multi-clients.sh list"
+    "clients:list": "bash ./scripts/multi-clients.sh list",
+    "test:e2e": "pnpm --dir .. compose:up && playwright test -c playwright.config.ts",
+    "test:e2e:headed": "pnpm --dir .. compose:up && playwright test -c playwright.config.ts --headed",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.20",
@@ -23,6 +26,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "25.3.3",
