@@ -106,10 +106,12 @@ describe("reduceWhisperState", () => {
       createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10))
     );
 
+    const preWhispersSnapshot = structuredClone(initial.whispers);
     const stateRequest = createEnvelope("STATE_REQUEST", "bob", {});
     const next = reduceWhisperState(initial, stateRequest);
 
-    expect(next.whispers).toEqual(initial.whispers);
+    expect(next.whispers).toEqual(preWhispersSnapshot);
+    expect(preWhispersSnapshot).toEqual(initial.whispers);
     expect(next.seenEventIds[stateRequest.eventId]).toBe(true);
   });
 
