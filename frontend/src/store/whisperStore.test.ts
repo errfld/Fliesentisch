@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEnvelope, Whisper } from "@/lib/protocol";
-import {
-  calculateMainVolume,
-  reduceWhisperState,
-  WhisperCoreState
-} from "@/store/whisperStore";
+import { calculateMainVolume, reduceWhisperState } from "@/store/whisperStore";
+import type { WhisperCoreState } from "@/store/whisperStore";
 
 const baseState: WhisperCoreState = {
   localIdentity: "alice",
