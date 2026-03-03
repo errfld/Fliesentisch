@@ -15,3 +15,10 @@ backend/target
 # IDE
 .vscode
 .idea
+
+# Playwright artifacts
+.playwright/
+.playwright-cli/
+playwright-report/
+test-results/
+output/playwright/
