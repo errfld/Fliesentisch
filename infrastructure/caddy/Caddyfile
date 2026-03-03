@@ -3,9 +3,5 @@
 }
 
 :80 {
-  handle_path /api/* {
-    reverse_proxy auth:8787
-  }
-
   reverse_proxy frontend:3000
 }

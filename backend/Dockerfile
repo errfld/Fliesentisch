@@ -1,8 +1,6 @@
-FROM rust:1.84-bookworm AS builder
+FROM rust:1.92-bookworm AS builder
 WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
-RUN mkdir -p src && echo 'fn main() {}' > src/main.rs
-RUN cargo build --release || true
 COPY src ./src
 RUN cargo build --release
 

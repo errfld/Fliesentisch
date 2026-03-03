@@ -1,17 +1,25 @@
-import { RoomSession } from "@/components/RoomSession";
+import { RoomSessionClient } from "@/components/RoomSessionClient";
 
 type RoomPageProps = {
-  params: { room: string };
-  searchParams: { name?: string; joinKey?: string };
+  params: Promise<{ room: string }>;
+  searchParams: Promise<{ name?: string | string[]; joinKey?: string | string[] }>;
 };
 
-export default function RoomPage({ params, searchParams }: RoomPageProps) {
-  const displayName = searchParams.name ?? "Player";
-  const joinKey = searchParams.joinKey;
+function firstParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+}
+
+export default async function RoomPage({ params, searchParams }: RoomPageProps) {
+  const [{ room }, query] = await Promise.all([params, searchParams]);
+  const displayName = firstParam(query.name) ?? "Player";
+  const joinKey = firstParam(query.joinKey);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-canvas via-[#111722] to-[#0a0d13] p-4 md:p-6">
-      <RoomSession roomName={params.room} displayName={displayName} joinKey={joinKey} />
+      <RoomSessionClient roomName={room} displayName={displayName} joinKey={joinKey} />
     </main>
   );
 }

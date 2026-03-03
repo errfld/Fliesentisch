@@ -1,0 +1,6 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e20] [cursor=pointer]:
+    - img [ref=e21]
+  - alert [ref=e24]
+  - main [ref=e25]:
+    - generic [ref=e26]: Permission denied

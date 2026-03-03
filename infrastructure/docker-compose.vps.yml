@@ -1,6 +1,6 @@
 services:
   livekit:
-    image: livekit/livekit-server:v1.8.3
+    image: livekit/livekit-server:v1.9.11
     command: --config /etc/livekit.yaml
     restart: unless-stopped
     ports:
@@ -27,7 +27,7 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/virtual-table-frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_AUTH_URL: ${NEXT_PUBLIC_AUTH_URL}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8787}
       NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
       NEXT_PUBLIC_DEFAULT_ROOM: ${NEXT_PUBLIC_DEFAULT_ROOM:-dnd-table-1}
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DisconnectReason,
   createLocalAudioTrack,
   createLocalVideoTrack,
   LocalAudioTrack,
@@ -12,7 +13,7 @@ import {
   RoomEvent,
   Track
 } from "livekit-client";
-import { getOrCreateClientId, toIdentity } from "@/lib/client-id";
+import { createUuid, getOrCreateClientId, toIdentity } from "@/lib/client-id";
 import {
   AnyProtocolEnvelope,
   createEnvelope,
@@ -44,8 +45,11 @@ type AudioTrackItem = {
   isMain: boolean;
 };
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? "http://localhost:8787";
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL ?? "ws://localhost:7880";
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
+}
 
 export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps) {
   const [clientId, setClientId] = useState("");
@@ -81,6 +85,30 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   const setSelectedWhisperId = useWhisperStore((state) => state.setSelectedWhisperId);
   const setFollowSpotlight = useWhisperStore((state) => state.setFollowSpotlight);
   const applyEnvelope = useWhisperStore((state) => state.applyEnvelope);
+
+  const livekitUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return LIVEKIT_URL ?? "ws://localhost:7880";
+    }
+
+    if (LIVEKIT_URL) {
+      try {
+        const parsed = new URL(LIVEKIT_URL);
+        const browserHost = window.location.hostname;
+        if (window.location.protocol === "https:" && parsed.protocol === "ws:") {
+          parsed.protocol = "wss:";
+        }
+        if (isLoopbackHost(parsed.hostname) && !isLoopbackHost(browserHost)) {
+          parsed.hostname = browserHost;
+        }
+        return parsed.toString();
+      } catch {
+        return LIVEKIT_URL;
+      }
+    }
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${protocol}://${window.location.hostname}:7880`;
+  }, []);
 
   const identity = useMemo(() => {
     if (!clientId) {
@@ -128,7 +156,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
     const fetchToken = async () => {
       try {
-        const response = await fetch(`${AUTH_URL}/api/v1/token`, {
+        const response = await fetch("/api/v1/token", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -148,15 +176,13 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         }
 
         setToken(body.token);
+        return;
       } catch (err) {
         if (controller.signal.aborted) {
           return;
         }
         setError(err instanceof Error ? err.message : "Failed to fetch access token");
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsConnecting(false);
-        }
+        setIsConnecting(false);
       }
     };
 
@@ -175,7 +201,9 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
     const connect = async () => {
       try {
-        await lkRoom.connect(LIVEKIT_URL, token);
+        setIsConnecting(true);
+        setError(null);
+        await lkRoom.connect(livekitUrl, token);
         const mainTrack = await createLocalAudioTrack();
         const publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
 
@@ -189,8 +217,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         mainPubRef.current = publication;
         setMicEnabled(!mainTrack.isMuted);
         setRoom(lkRoom);
+        setIsConnecting(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
+        setIsConnecting(false);
       }
     };
 
@@ -214,7 +244,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       lkRoom.disconnect();
       setRoom(null);
     };
-  }, [token]);
+  }, [livekitUrl, token]);
 
   useEffect(() => {
     if (!room || !identity) {
@@ -256,8 +286,16 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     }
 
     const refresh = () => setRenderTick((tick) => tick + 1);
-    const onDisconnected = () => {
+    const onDisconnected = (reason?: DisconnectReason) => {
       setRoom(null);
+      setIsConnecting(false);
+      if (reason && reason !== DisconnectReason.CLIENT_INITIATED) {
+        if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
+          setError("Disconnected: duplicate identity. Refresh to generate a new client ID.");
+        } else {
+          setError(`Disconnected (${String(reason)}).`);
+        }
+      }
       setRenderTick((tick) => tick + 1);
     };
     const onActiveSpeakers = () => {
@@ -509,7 +547,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
-    const id = crypto.randomUUID();
+    const id = createUuid();
     const now = Date.now();
     const whisper: Whisper = {
       id,
