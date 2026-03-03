@@ -386,7 +386,6 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     const loadDevices = async () => {
       if (!canAccessMediaDevices()) {
         setError(MEDIA_ACCESS_ERROR);
-        setIsConnecting(false);
         return;
       }
 

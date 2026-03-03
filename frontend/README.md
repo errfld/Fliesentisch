@@ -19,6 +19,20 @@ pnpm dev
 
 Use Playwright CLI sessions to open multiple participants on one machine (no LAN HTTPS setup required):
 
+Setup:
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
+"$PWCLI" --help
+```
+
+- Expected wrapper path: `$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh`
+- If `PWCLI` is unset or not executable, `multi-clients.sh` falls back to:
+  - `playwright_cli.sh` on `PATH`
+  - then `playwright-cli` on `PATH`
+  - then `npx --yes --package @playwright/cli playwright-cli` (requires Node.js/npm)
+
 ```bash
 # default: 3 clients (Player1..Player3) in room dnd-table-1
 pnpm clients:start

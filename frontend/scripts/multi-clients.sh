@@ -10,21 +10,35 @@ JOIN_KEY="${JOIN_KEY:-}"
 SESSION_PREFIX="${SESSION_PREFIX:-vt-sim}"
 CLIENT_COUNT="${CLIENT_COUNT:-3}"
 CLIENT_NAMES="${CLIENT_NAMES:-}"
+PWCLI_CLOSE_TIMEOUT_SEC="${PWCLI_CLOSE_TIMEOUT_SEC:-10}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_PATH="${PLAYWRIGHT_CLI_CONFIG:-$SCRIPT_DIR/playwright-cli.multiclient.config.json}"
 
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 PWCLI="${PWCLI:-$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh}"
+PWCLI_SOURCE=""
+declare -a PWCLI_CMD=()
 
-if ! command -v npx >/dev/null 2>&1; then
-  echo "npx is required. Install Node.js/npm first."
-  exit 1
+if [[ -x "$PWCLI" ]]; then
+  PWCLI_CMD=("$PWCLI")
+  PWCLI_SOURCE="$PWCLI"
+elif command -v playwright_cli.sh >/dev/null 2>&1; then
+  PWCLI_CMD=("$(command -v playwright_cli.sh)")
+  PWCLI_SOURCE="playwright_cli.sh on PATH"
+elif command -v playwright-cli >/dev/null 2>&1; then
+  PWCLI_CMD=("$(command -v playwright-cli)")
+  PWCLI_SOURCE="playwright-cli on PATH"
+elif command -v npx >/dev/null 2>&1; then
+  PWCLI_CMD=(npx --yes --package @playwright/cli playwright-cli)
+  PWCLI_SOURCE="npx @playwright/cli fallback"
 fi
 
-if [[ ! -x "$PWCLI" ]]; then
-  echo "Playwright CLI wrapper not found at: $PWCLI"
-  echo "Set PWCLI to your wrapper script path."
+if (( ${#PWCLI_CMD[@]} == 0 )); then
+  echo "Playwright CLI runner is unavailable."
+  echo "Expected wrapper: \$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
+  echo "Set PWCLI to an executable playwright_cli.sh path, install playwright-cli on PATH,"
+  echo "or install Node.js/npm so the script can fall back to npx @playwright/cli."
   exit 1
 fi
 
@@ -35,6 +49,30 @@ fi
 
 urlencode() {
   node -p "encodeURIComponent(process.argv[1])" -- "$1"
+}
+
+run_pwcli() {
+  "${PWCLI_CMD[@]}" "$@"
+}
+
+close_session() {
+  local session="$1"
+  run_pwcli --session "$session" close >/dev/null 2>&1 &
+  local close_pid=$!
+  local waited=0
+
+  while kill -0 "$close_pid" 2>/dev/null; do
+    if (( waited >= PWCLI_CLOSE_TIMEOUT_SEC )); then
+      kill "$close_pid" >/dev/null 2>&1 || true
+      wait "$close_pid" >/dev/null 2>&1 || true
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  wait "$close_pid" >/dev/null 2>&1 || true
+  return 0
 }
 
 resolve_names() {
@@ -89,22 +127,44 @@ start_clients() {
       url="${url}&joinKey=$(urlencode "$JOIN_KEY")"
     fi
 
-    "$PWCLI" --session "$session" close >/dev/null 2>&1 || true
-    "$PWCLI" --session "$session" delete-data >/dev/null 2>&1 || true
-    "$PWCLI" --session "$session" open "$url" --config "$CONFIG_PATH" --headed >/dev/null
+    close_session "$session" || true
+    run_pwcli --session "$session" delete-data >/dev/null 2>&1 || true
+    run_pwcli --session "$session" open "$url" --config "$CONFIG_PATH" --headed >/dev/null
     echo "opened: session=$session name=$name url=$url"
   done
 }
 
 stop_clients() {
-  local -a names
-  read -r -a names <<<"$(resolve_names "$@")"
+  local -a sessions=()
+  local session
+  while IFS= read -r session; do
+    if [[ -n "$session" ]]; then
+      sessions+=("$session")
+    fi
+  done < <(
+    run_pwcli list 2>/dev/null | awk -v prefix="${SESSION_PREFIX}-" '
+      /^- / {
+        name = $0;
+        sub(/^- /, "", name);
+        sub(/:$/, "", name);
+        if (index(name, prefix) == 1) {
+          print name;
+        }
+      }
+    '
+  )
 
-  local idx session
-  for idx in "${!names[@]}"; do
-    session="${SESSION_PREFIX}-$((idx + 1))"
-    "$PWCLI" --session "$session" close >/dev/null 2>&1 || true
-    echo "closed: session=$session"
+  if (( ${#sessions[@]} == 0 )); then
+    echo "No running sessions found for prefix: ${SESSION_PREFIX}-"
+    return 0
+  fi
+
+  for session in "${sessions[@]}"; do
+    if close_session "$session"; then
+      echo "closed: session=$session"
+    else
+      echo "close timed out: session=$session (continuing)"
+    fi
   done
 }
 
@@ -113,17 +173,17 @@ case "$ACTION" in
     start_clients "$@"
     ;;
   stop)
-    stop_clients "$@"
+    stop_clients
     ;;
   list)
-    "$PWCLI" list
+    run_pwcli list
     ;;
   *)
     echo "Usage: $(basename "$0") <start|stop|list> [name ...]"
     echo "Examples:"
     echo "  $(basename "$0") start Alice Bob Carol"
     echo "  CLIENT_COUNT=5 $(basename "$0") start"
-    echo "  CLIENT_NAMES=Alice,Bob,Carol $(basename "$0") stop"
+    echo "  SESSION_PREFIX=vt-sim $(basename "$0") stop"
     exit 1
     ;;
 esac
