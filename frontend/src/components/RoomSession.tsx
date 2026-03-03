@@ -46,6 +46,25 @@ type AudioTrackItem = {
 };
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+const MEDIA_ACCESS_ERROR =
+  "Microphone/camera access requires HTTPS (or localhost) and browser permission to use media devices.";
+
+function canAccessMediaDevices(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.isSecureContext && navigator.mediaDevices?.getUserMedia);
+}
+
+function formatConnectionError(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : fallback;
+  const normalized = message.toLowerCase();
+  if (normalized.includes("getusermedia") || normalized.includes("mediadevices")) {
+    return MEDIA_ACCESS_ERROR;
+  }
+  return message;
+}
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
@@ -200,6 +219,12 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     const lkRoom = new Room({ adaptiveStream: true, dynacast: true });
 
     const connect = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        setIsConnecting(false);
+        return;
+      }
+
       try {
         setIsConnecting(true);
         setError(null);
@@ -219,7 +244,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         setRoom(lkRoom);
         setIsConnecting(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
+        setError(formatConnectionError(err, "Failed to connect to LiveKit"));
         setIsConnecting(false);
       }
     };
@@ -359,6 +384,12 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
   useEffect(() => {
     const loadDevices = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        setIsConnecting(false);
+        return;
+      }
+
       try {
         const [audios, videos] = await Promise.all([
           Room.getLocalDevices("audioinput"),
@@ -374,7 +405,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           setSelectedVideoDevice((current) => current || videos[0].deviceId);
         }
       } catch (deviceError) {
-        setError(deviceError instanceof Error ? deviceError.message : "Failed to query devices");
+        setError(formatConnectionError(deviceError, "Failed to query media devices"));
       }
     };
 
@@ -502,15 +533,19 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
-    const track = await createLocalVideoTrack(
-      selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
-    );
-    const publication = await room.localParticipant.publishTrack(track);
+    try {
+      const track = await createLocalVideoTrack(
+        selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
+      );
+      const publication = await room.localParticipant.publishTrack(track);
 
-    cameraTrackRef.current = track;
-    cameraPubRef.current = publication;
-    setCameraEnabled(true);
-    setRenderTick((tick) => tick + 1);
+      cameraTrackRef.current = track;
+      cameraPubRef.current = publication;
+      setCameraEnabled(true);
+      setRenderTick((tick) => tick + 1);
+    } catch (cameraError) {
+      setError(formatConnectionError(cameraError, "Failed to enable camera"));
+    }
   }, [room, selectedVideoDevice]);
 
   const onSelectAudioDevice = useCallback(
