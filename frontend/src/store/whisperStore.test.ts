@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createEnvelope, Whisper } from "@/lib/protocol";
-import { reduceWhisperState, WhisperCoreState } from "@/store/whisperStore";
+import {
+  calculateMainVolume,
+  reduceWhisperState,
+  WhisperCoreState
+} from "@/store/whisperStore";
 
 const baseState: WhisperCoreState = {
   localIdentity: "alice",
@@ -21,6 +25,23 @@ function whisper(id: string, updatedAt: number, createdAt = updatedAt): Whisper 
     updatedAt
   };
 }
+
+describe("calculateMainVolume", () => {
+  it("returns full volume when no whisper is selected", () => {
+    expect(calculateMainVolume({}, undefined, "alice")).toBe(1);
+  });
+
+  it("returns full volume when selected whisper does not contain local identity", () => {
+    const whispers = {
+      w1: {
+        ...whisper("w1", 10),
+        members: ["bob", "charlie"]
+      }
+    };
+
+    expect(calculateMainVolume(whispers, "w1", "alice")).toBe(1);
+  });
+});
 
 describe("reduceWhisperState", () => {
   it("applies whisper create and deduplicates event id", () => {
@@ -77,5 +98,128 @@ describe("reduceWhisperState", () => {
     );
 
     expect(updated.mainVolume).toBe(0.3);
+  });
+
+  it("marks STATE_REQUEST as seen without mutating whispers", () => {
+    const initial = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10))
+    );
+
+    const stateRequest = createEnvelope("STATE_REQUEST", "bob", {});
+    const next = reduceWhisperState(initial, stateRequest);
+
+    expect(next.whispers).toEqual(initial.whispers);
+    expect(next.seenEventIds[stateRequest.eventId]).toBe(true);
+  });
+
+  it("merges snapshot whispers and applies spotlight identity from snapshot", () => {
+    const snapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
+      whispers: [whisper("w1", 10), whisper("w2", 12)],
+      spotlightIdentity: "gm"
+    });
+
+    const next = reduceWhisperState(baseState, snapshot);
+
+    expect(Object.keys(next.whispers).sort()).toEqual(["w1", "w2"]);
+    expect(next.spotlightIdentity).toBe("gm");
+  });
+
+  it("keeps existing spotlight when snapshot spotlight identity is null", () => {
+    const withSpotlight: WhisperCoreState = {
+      ...baseState,
+      spotlightIdentity: "gm"
+    };
+
+    const snapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
+      whispers: [whisper("w1", 10)],
+      spotlightIdentity: null
+    });
+
+    const next = reduceWhisperState(withSpotlight, snapshot);
+
+    expect(next.spotlightIdentity).toBe("gm");
+  });
+
+  it("applies whisper close only when update is fresh enough", () => {
+    const created = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10))
+    );
+
+    const staleClose = reduceWhisperState(
+      created,
+      createEnvelope("WHISPER_CLOSE", "alice", {
+        id: "w1",
+        updatedAt: 9
+      })
+    );
+
+    const freshClose = reduceWhisperState(
+      staleClose,
+      createEnvelope("WHISPER_CLOSE", "alice", {
+        id: "w1",
+        updatedAt: 10
+      })
+    );
+
+    expect(staleClose.whispers.w1).toBeDefined();
+    expect(freshClose.whispers.w1).toBeUndefined();
+  });
+
+  it("clears selected whisper and restores main volume when selected whisper closes", () => {
+    const created = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10))
+    );
+
+    const selected: WhisperCoreState = {
+      ...created,
+      selectedWhisperId: "w1",
+      mainVolume: 0.3
+    };
+
+    const closed = reduceWhisperState(
+      selected,
+      createEnvelope("WHISPER_CLOSE", "alice", {
+        id: "w1",
+        updatedAt: 10
+      })
+    );
+
+    expect(closed.selectedWhisperId).toBeUndefined();
+    expect(closed.mainVolume).toBe(1);
+  });
+
+  it("keeps spotlight unchanged when SPOTLIGHT_UPDATE contains null identity", () => {
+    const current: WhisperCoreState = {
+      ...baseState,
+      spotlightIdentity: "gm"
+    };
+
+    const next = reduceWhisperState(
+      current,
+      createEnvelope("SPOTLIGHT_UPDATE", "gm", {
+        identity: null,
+        updatedAt: 123
+      })
+    );
+
+    expect(next.spotlightIdentity).toBe("gm");
+  });
+
+  it("normalizes members by removing duplicates on whisper create", () => {
+    const created = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", {
+        id: "w1",
+        members: ["alice", "bob", "alice", "bob"],
+        createdBy: "alice",
+        createdAt: 10,
+        updatedAt: 10
+      })
+    );
+
+    expect(created.whispers.w1.members).toEqual(["alice", "bob"]);
   });
 });
