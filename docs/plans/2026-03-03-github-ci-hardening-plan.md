@@ -1,9 +1,11 @@
 # GitHub CI Hardening Plan (Tests + Lint + Security + Merge Gate)
 
 ## Summary
+
 Create one authoritative CI workflow that runs all feasible checks for this repo on every PR, blocks merging unless all checks pass, and adds free/open-source dependency security scanning for both TypeScript and Rust.
 
 ## Public Interface/Contract Changes
+
 - New required GitHub check contract: `CI / merge-gate` (single status check used by branch protection).
 - Deprecated workflow checks from:
   - `.github/workflows/frontend.yml`
@@ -14,6 +16,7 @@ Create one authoritative CI workflow that runs all feasible checks for this repo
   - `.github/dependabot.yml`
 
 ## Implementation Plan
+
 1. Save this plan as a dated plan doc in `docs/plans`.
 2. Add `.github/workflows/ci.yml` with triggers:
    - `pull_request` (all branches, no path filters)
@@ -60,6 +63,7 @@ Create one authoritative CI workflow that runs all feasible checks for this repo
 6. Add `.github/dependabot.yml` (free GitHub-native) for weekly npm + cargo dependency update PRs.
 
 ## Branch Protection (Required for “only allow merge if passing”)
+
 1. In GitHub branch protection/ruleset for `main`, enable:
    - Require pull request before merging
    - Require status checks to pass
@@ -69,6 +73,7 @@ Create one authoritative CI workflow that runs all feasible checks for this repo
    - `CI / merge-gate`
 
 ## Test Cases and Scenarios
+
 1. PR with TS lint error in `frontend` must fail `frontend_infra_checks` and `merge-gate`.
 2. PR with Rust clippy warning must fail `backend_checks` and `merge-gate`.
 3. PR introducing high-severity npm vulnerability must fail `security_js` and `merge-gate`.
@@ -78,6 +83,7 @@ Create one authoritative CI workflow that runs all feasible checks for this repo
 7. Merge queue run must execute CI via `merge_group`.
 
 ## Assumptions and Defaults Chosen
+
 - Security policy: block on `High/Critical` vulnerabilities.
 - Build policy: require app builds (`frontend build` + `cargo build`), not Docker image builds in PR CI.
 - Required-check model: single aggregate required check (`CI / merge-gate`).
