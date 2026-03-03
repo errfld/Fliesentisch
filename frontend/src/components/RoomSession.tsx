@@ -225,12 +225,15 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         return;
       }
 
+      let mainTrack: LocalAudioTrack | null = null;
+      let publication: LocalTrackPublication | null = null;
+
       try {
         setIsConnecting(true);
         setError(null);
         await lkRoom.connect(livekitUrl, token);
-        const mainTrack = await createLocalAudioTrack();
-        const publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
+        mainTrack = await createLocalAudioTrack();
+        publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
 
         if (cancelled) {
           mainTrack.stop();
@@ -244,6 +247,18 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         setRoom(lkRoom);
         setIsConnecting(false);
       } catch (err) {
+        if (mainTrack && publication) {
+          try {
+            await lkRoom.localParticipant.unpublishTrack(mainTrack);
+          } catch {
+            // Best-effort cleanup for partially initialized local tracks.
+          }
+        }
+        mainTrack?.stop();
+        mainTrackRef.current = null;
+        mainPubRef.current = null;
+        lkRoom.disconnect();
+        setRoom(null);
         setError(formatConnectionError(err, "Failed to connect to LiveKit"));
         setIsConnecting(false);
       }
@@ -532,8 +547,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
+    let track: LocalVideoTrack | null = null;
+
     try {
-      const track = await createLocalVideoTrack(
+      track = await createLocalVideoTrack(
         selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
       );
       const publication = await room.localParticipant.publishTrack(track);
@@ -543,6 +560,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       setCameraEnabled(true);
       setRenderTick((tick) => tick + 1);
     } catch (cameraError) {
+      track?.stop();
+      cameraTrackRef.current = null;
+      cameraPubRef.current = null;
+      setCameraEnabled(false);
       setError(formatConnectionError(cameraError, "Failed to enable camera"));
     }
   }, [room, selectedVideoDevice]);

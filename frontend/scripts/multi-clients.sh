@@ -17,21 +17,16 @@ CONFIG_PATH="${PLAYWRIGHT_CLI_CONFIG:-$SCRIPT_DIR/playwright-cli.multiclient.con
 
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 PWCLI="${PWCLI:-$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh}"
-PWCLI_SOURCE=""
 declare -a PWCLI_CMD=()
 
 if [[ -x "$PWCLI" ]]; then
   PWCLI_CMD=("$PWCLI")
-  PWCLI_SOURCE="$PWCLI"
 elif command -v playwright_cli.sh >/dev/null 2>&1; then
   PWCLI_CMD=("$(command -v playwright_cli.sh)")
-  PWCLI_SOURCE="playwright_cli.sh on PATH"
 elif command -v playwright-cli >/dev/null 2>&1; then
   PWCLI_CMD=("$(command -v playwright-cli)")
-  PWCLI_SOURCE="playwright-cli on PATH"
 elif command -v npx >/dev/null 2>&1; then
   PWCLI_CMD=(npx --yes --package @playwright/cli playwright-cli)
-  PWCLI_SOURCE="npx @playwright/cli fallback"
 fi
 
 if (( ${#PWCLI_CMD[@]} == 0 )); then
@@ -39,11 +34,6 @@ if (( ${#PWCLI_CMD[@]} == 0 )); then
   echo "Expected wrapper: \$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
   echo "Set PWCLI to an executable playwright_cli.sh path, install playwright-cli on PATH,"
   echo "or install Node.js/npm so the script can fall back to npx @playwright/cli."
-  exit 1
-fi
-
-if [[ ! -f "$CONFIG_PATH" ]]; then
-  echo "Playwright config not found at: $CONFIG_PATH"
   exit 1
 fi
 
@@ -111,6 +101,11 @@ resolve_names() {
 }
 
 start_clients() {
+  if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo "Playwright config not found at: $CONFIG_PATH"
+    exit 1
+  fi
+
   local -a names
   read -r -a names <<<"$(resolve_names "$@")"
 
