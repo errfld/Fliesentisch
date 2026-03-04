@@ -1,0 +1,322 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend_infra_checks:
+    name: frontend_infra_checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare infrastructure env
+        run: cp infrastructure/.env.example infrastructure/.env
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend test
+        run: pnpm --filter frontend test
+
+      - name: Frontend build
+        run: pnpm --filter frontend build
+
+      - name: Infrastructure lint
+        run: pnpm --filter infrastructure lint
+
+      - name: Infrastructure test
+        run: pnpm --filter infrastructure test
+
+  frontend_e2e_checks:
+    name: frontend_e2e_checks
+    needs: frontend_infra_checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare infrastructure env
+        run: cp infrastructure/.env.example infrastructure/.env
+
+      - name: Start LiveKit and Auth services
+        run: docker compose -f infrastructure/docker-compose.yml up -d livekit auth
+
+      - name: Install Playwright browser
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e
+        run: pnpm --filter frontend exec playwright test -c playwright.config.ts
+
+      - name: Capture Compose logs
+        if: always()
+        run: |
+          mkdir -p frontend/test-results
+          docker compose -f infrastructure/docker-compose.yml logs --no-color livekit auth > frontend/test-results/compose-services.log || true
+
+      - name: Summarize Playwright failures
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const outputPath = "frontend/test-results/results.json";
+          const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+
+          if (!summaryPath) {
+            process.exit(0);
+          }
+
+          if (!fs.existsSync(outputPath)) {
+            fs.appendFileSync(summaryPath, "## Playwright e2e summary\nNo JSON report found.\n");
+            process.exit(0);
+          }
+
+          const report = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+          const failures = [];
+
+          const visitSuite = (suite, path) => {
+            const nextPath = suite.title ? [...path, suite.title] : path;
+            for (const spec of suite.specs ?? []) {
+              const specPath = [...nextPath, spec.title].filter(Boolean).join(" › ");
+              for (const test of spec.tests ?? []) {
+                const failedResults = (test.results ?? []).filter((result) =>
+                  ["failed", "timedOut", "interrupted"].includes(result.status)
+                );
+                if (failedResults.length === 0) {
+                  continue;
+                }
+                const attachments = failedResults
+                  .flatMap((result) => result.attachments ?? [])
+                  .map((attachment) => attachment.path)
+                  .filter(Boolean);
+                failures.push({
+                  title: specPath || "(untitled spec)",
+                  project: test.projectName || "default",
+                  status: failedResults[0].status,
+                  attachments
+                });
+              }
+            }
+            for (const child of suite.suites ?? []) {
+              visitSuite(child, nextPath);
+            }
+          };
+
+          for (const suite of report.suites ?? []) {
+            visitSuite(suite, []);
+          }
+
+          const lines = [];
+          lines.push("## Playwright e2e summary");
+          lines.push(`- Status: ${report.stats?.expected === report.stats?.passed ? "passed" : "failed"}`);
+          lines.push(`- Expected: ${report.stats?.expected ?? 0}`);
+          lines.push(`- Passed: ${report.stats?.passed ?? 0}`);
+          lines.push(`- Failed: ${report.stats?.unexpected ?? 0}`);
+          lines.push("");
+
+          if (failures.length === 0) {
+            lines.push("No failed tests.");
+          } else {
+            lines.push("### Failed tests");
+            for (const failure of failures) {
+              lines.push(`- [${failure.project}] ${failure.title} (${failure.status})`);
+              if (failure.attachments.length > 0) {
+                lines.push(`- attachments: ${failure.attachments.join(", ")}`);
+              }
+            }
+          }
+
+          fs.appendFileSync(summaryPath, `${lines.join("\n")}\n`);
+          NODE
+
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-traces
+          path: frontend/test-results/**/trace.zip
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-screenshots
+          path: frontend/test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright structured reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-structured-reports
+          path: |
+            frontend/test-results/junit.xml
+            frontend/test-results/results.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-html-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Compose logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compose-service-logs
+          path: frontend/test-results/compose-services.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop docker services
+        if: always()
+        run: docker compose -f infrastructure/docker-compose.yml down -v
+
+  backend_checks:
+    name: backend_checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+        with:
+          components: rustfmt, clippy
+
+      - name: Cargo fmt
+        run: cargo fmt --manifest-path backend/Cargo.toml -- --check
+
+      - name: Cargo clippy
+        run: cargo clippy --manifest-path backend/Cargo.toml --all-targets -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --manifest-path backend/Cargo.toml
+
+      - name: Cargo build
+        run: cargo build --manifest-path backend/Cargo.toml --locked
+
+  security_js:
+    name: security_js
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit (high and critical)
+        run: pnpm audit --audit-level high
+
+      - name: Dependency review (pull requests only; non-blocking)
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803
+        with:
+          fail-on-severity: high
+
+  security_rust:
+    name: security_rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@d0c60d3908965d16ed7e5fb38682d4659f0a6584
+
+      - name: Cargo audit
+        run: cargo audit --file backend/Cargo.lock
+
+  merge-gate:
+    name: merge-gate
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - frontend_infra_checks
+      - frontend_e2e_checks
+      - backend_checks
+      - security_js
+      - security_rust
+    steps:
+      - name: Validate upstream job status
+        env:
+          FRONTEND_INFRA_RESULT: ${{ needs.frontend_infra_checks.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend_e2e_checks.result }}
+          BACKEND_RESULT: ${{ needs.backend_checks.result }}
+          SECURITY_JS_RESULT: ${{ needs.security_js.result }}
+          SECURITY_RUST_RESULT: ${{ needs.security_rust.result }}
+        run: |
+          test "$FRONTEND_INFRA_RESULT" = "success"
+          test "$FRONTEND_E2E_RESULT" = "success"
+          test "$BACKEND_RESULT" = "success"
+          test "$SECURITY_JS_RESULT" = "success"
+          test "$SECURITY_RUST_RESULT" = "success"

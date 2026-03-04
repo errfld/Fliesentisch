@@ -7,6 +7,7 @@ import type {
   Whisper,
   WhisperClosePayload
 } from "@/lib/protocol";
+import { enforceSingleWhisperMembership } from "@/lib/whisper-membership";
 
 export type WhisperCoreState = {
   localIdentity: string;
@@ -111,9 +112,14 @@ export function reduceWhisperState(
   }
 
   nextWhispers = enforceWhisperLimit(nextWhispers);
+  nextWhispers = enforceSingleWhisperMembership(nextWhispers);
 
+  const selectedWhisper =
+    state.selectedWhisperId && nextWhispers[state.selectedWhisperId]
+      ? nextWhispers[state.selectedWhisperId]
+      : undefined;
   const selectedWhisperId =
-    state.selectedWhisperId && nextWhispers[state.selectedWhisperId] ? state.selectedWhisperId : undefined;
+    selectedWhisper && selectedWhisper.members.includes(state.localIdentity) ? selectedWhisper.id : undefined;
 
   return {
     ...state,

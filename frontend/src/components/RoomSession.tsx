@@ -16,6 +16,7 @@ import {
   parseProtocolEnvelope
 } from "@/lib/protocol";
 import type { AnyProtocolEnvelope, SpotlightPayload, Whisper, WhisperClosePayload } from "@/lib/protocol";
+import { collectReassignmentMutations } from "@/lib/whisper-membership";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 import { useWhisperStore } from "@/store/whisperStore";
 import { TrackElement } from "@/components/TrackElement";
@@ -29,6 +30,7 @@ type RoomSessionProps = {
 type VideoTile = {
   key: string;
   identity: string;
+  trackSid: string;
   track: Track;
   isLocal: boolean;
 };
@@ -40,6 +42,25 @@ type AudioTrackItem = {
 };
 
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
+const MEDIA_ACCESS_ERROR =
+  "Microphone/camera access requires HTTPS (or localhost) and browser permission to use media devices.";
+
+function canAccessMediaDevices(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.isSecureContext && navigator.mediaDevices?.getUserMedia);
+}
+
+function formatConnectionError(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : fallback;
+  const normalized = message.toLowerCase();
+  if (normalized.includes("getusermedia") || normalized.includes("mediadevices")) {
+    return MEDIA_ACCESS_ERROR;
+  }
+  return message;
+}
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
@@ -51,7 +72,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [, setRenderTick] = useState(0);
+  const [renderTick, setRenderTick] = useState(0);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
   const [isPttActive, setIsPttActive] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
@@ -60,6 +81,8 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState("");
   const [selectedVideoDevice, setSelectedVideoDevice] = useState("");
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<Set<string>>(new Set());
+  const [whisperNotice, setWhisperNotice] = useState<string | null>(null);
 
   const mainTrackRef = useRef<LocalAudioTrack | null>(null);
   const mainPubRef = useRef<LocalTrackPublication | null>(null);
@@ -113,6 +136,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
   const selectedWhisper = selectedWhisperId ? whispers[selectedWhisperId] : undefined;
   const isSelectedMember = Boolean(selectedWhisper && selectedWhisper.members.includes(identity));
+  const selectedParticipants = useMemo(
+    () => Array.from(selectedParticipantIds).sort((a, b) => a.localeCompare(b)),
+    [selectedParticipantIds]
+  );
 
   useEffect(() => {
     setClientId(getOrCreateClientId());
@@ -194,12 +221,21 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     const lkRoom = new Room({ adaptiveStream: true, dynacast: true });
 
     const connect = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        setIsConnecting(false);
+        return;
+      }
+
+      let mainTrack: LocalAudioTrack | null = null;
+      let publication: LocalTrackPublication | null = null;
+
       try {
         setIsConnecting(true);
         setError(null);
         await lkRoom.connect(livekitUrl, token);
-        const mainTrack = await createLocalAudioTrack();
-        const publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
+        mainTrack = await createLocalAudioTrack();
+        publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
 
         if (cancelled) {
           mainTrack.stop();
@@ -213,7 +249,19 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         setRoom(lkRoom);
         setIsConnecting(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
+        if (mainTrack && publication) {
+          try {
+            await lkRoom.localParticipant.unpublishTrack(mainTrack);
+          } catch {
+            // Best-effort cleanup for partially initialized local tracks.
+          }
+        }
+        mainTrack?.stop();
+        mainTrackRef.current = null;
+        mainPubRef.current = null;
+        lkRoom.disconnect();
+        setRoom(null);
+        setError(formatConnectionError(err, "Failed to connect to LiveKit"));
         setIsConnecting(false);
       }
     };
@@ -318,6 +366,22 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     };
   }, [room]);
 
+  useEffect(() => {
+    if (!room) {
+      setSelectedParticipantIds(new Set());
+      return;
+    }
+
+    const connectedIdentities = new Set(Array.from(room.remoteParticipants.keys()));
+    setSelectedParticipantIds((current) => {
+      const filtered = Array.from(current).filter((participantId) => connectedIdentities.has(participantId));
+      if (filtered.length === current.size) {
+        return current;
+      }
+      return new Set(filtered);
+    });
+  }, [renderTick, room]);
+
   const applySelectiveSubscriptions = useCallback(() => {
     if (!room) {
       return;
@@ -353,6 +417,11 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
   useEffect(() => {
     const loadDevices = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        return;
+      }
+
       try {
         const [audios, videos] = await Promise.all([
           Room.getLocalDevices("audioinput"),
@@ -368,7 +437,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           setSelectedVideoDevice((current) => current || videos[0].deviceId);
         }
       } catch (deviceError) {
-        setError(deviceError instanceof Error ? deviceError.message : "Failed to query devices");
+        setError(formatConnectionError(deviceError, "Failed to query media devices"));
       }
     };
 
@@ -496,15 +565,25 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
-    const track = await createLocalVideoTrack(
-      selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
-    );
-    const publication = await room.localParticipant.publishTrack(track);
+    let track: LocalVideoTrack | null = null;
 
-    cameraTrackRef.current = track;
-    cameraPubRef.current = publication;
-    setCameraEnabled(true);
-    setRenderTick((tick) => tick + 1);
+    try {
+      track = await createLocalVideoTrack(
+        selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
+      );
+      const publication = await room.localParticipant.publishTrack(track);
+
+      cameraTrackRef.current = track;
+      cameraPubRef.current = publication;
+      setCameraEnabled(true);
+      setRenderTick((tick) => tick + 1);
+    } catch (cameraError) {
+      track?.stop();
+      cameraTrackRef.current = null;
+      cameraPubRef.current = null;
+      setCameraEnabled(false);
+      setError(formatConnectionError(cameraError, "Failed to enable camera"));
+    }
   }, [room, selectedVideoDevice]);
 
   const onSelectAudioDevice = useCallback(
@@ -531,21 +610,70 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     [room]
   );
 
+  const toggleParticipantSelection = useCallback(
+    (participantIdentity: string) => {
+      if (!participantIdentity || participantIdentity === identity) {
+        return;
+      }
+      setSelectedParticipantIds((current) => {
+        const next = new Set(current);
+        if (next.has(participantIdentity)) {
+          next.delete(participantIdentity);
+        } else {
+          next.add(participantIdentity);
+        }
+        return next;
+      });
+    },
+    [identity]
+  );
+
+  const publishReassignmentMutations = useCallback(
+    async (targetWhisperId: string, movedMembers: string[], updatedAt: number) => {
+      if (!identity) {
+        return;
+      }
+
+      const mutations = collectReassignmentMutations(whispers, targetWhisperId, movedMembers, updatedAt);
+      for (const mutation of mutations) {
+        if (mutation.type === "close") {
+          await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, mutation.payload));
+          continue;
+        }
+        await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, mutation.whisper));
+      }
+    },
+    [identity, publishEnvelope, whispers]
+  );
+
   const createWhisper = useCallback(async () => {
     if (!identity) {
       return;
     }
 
-    if (Object.keys(whispers).length >= 3) {
-      setError("Only three active whispers are allowed.");
+    if (selectedParticipants.length === 0) {
+      setWhisperNotice("Select one or more participants from the video tiles first.");
       return;
     }
 
     const id = createUuid();
     const now = Date.now();
+    const members = Array.from(new Set([identity, ...selectedParticipants]));
+    const reassignmentMutations = collectReassignmentMutations(whispers, id, members, now);
+    const projectedWhisperCount =
+      Object.keys(whispers).length -
+      reassignmentMutations.filter((mutation) => mutation.type === "close").length +
+      1;
+    if (projectedWhisperCount > 3) {
+      setWhisperNotice("Only three active whispers are allowed.");
+      return;
+    }
+
+    await publishReassignmentMutations(id, members, now);
+
     const whisper: Whisper = {
       id,
-      members: [identity],
+      members,
       createdBy: identity,
       createdAt: now,
       updatedAt: now
@@ -553,7 +681,9 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
     await publishEnvelope(createEnvelope("WHISPER_CREATE", identity, whisper));
     setSelectedWhisperId(id);
-  }, [identity, publishEnvelope, setSelectedWhisperId, whispers]);
+    setSelectedParticipantIds(new Set());
+    setWhisperNotice(null);
+  }, [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants, setSelectedWhisperId, whispers]);
 
   const joinWhisper = useCallback(
     async (whisper: Whisper) => {
@@ -561,16 +691,48 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         return;
       }
 
+      const now = Date.now();
+      await publishReassignmentMutations(whisper.id, [identity], now);
+
       const updated: Whisper = {
         ...whisper,
         members: Array.from(new Set([...whisper.members, identity])),
-        updatedAt: Date.now()
+        updatedAt: now
       };
 
       await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       setSelectedWhisperId(whisper.id);
+      setWhisperNotice(null);
     },
-    [identity, publishEnvelope, setSelectedWhisperId]
+    [identity, publishEnvelope, publishReassignmentMutations, setSelectedWhisperId]
+  );
+
+  const addSelectedParticipantsToWhisper = useCallback(
+    async (whisper: Whisper) => {
+      if (!identity || !whisper.members.includes(identity)) {
+        return;
+      }
+
+      const participantsToAdd = selectedParticipants.filter((participantId) => !whisper.members.includes(participantId));
+      if (participantsToAdd.length === 0) {
+        setWhisperNotice("No additional selected participants to add.");
+        return;
+      }
+
+      const now = Date.now();
+      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
+
+      const updated: Whisper = {
+        ...whisper,
+        members: Array.from(new Set([...whisper.members, ...participantsToAdd])),
+        updatedAt: now
+      };
+
+      await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      setSelectedParticipantIds(new Set());
+      setWhisperNotice(null);
+    },
+    [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants]
   );
 
   const leaveWhisper = useCallback(
@@ -601,6 +763,31 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     },
     [identity, publishEnvelope, selectedWhisperId, setSelectedWhisperId]
   );
+
+  const leaveCurrentWhisper = useCallback(async () => {
+    if (!identity) {
+      return;
+    }
+
+    const selected = selectedWhisperId ? whispers[selectedWhisperId] : undefined;
+    const activeWhisper =
+      selected && selected.members.includes(identity)
+        ? selected
+        :
+      Object.values(whispers).find((whisper) => whisper.members.includes(identity));
+    if (!activeWhisper) {
+      return;
+    }
+
+    await leaveWhisper(activeWhisper);
+  }, [identity, leaveWhisper, selectedWhisperId, whispers]);
+
+  useWhisperPtt({
+    enabled: Boolean(room && identity),
+    keyCode: "KeyG",
+    onPress: leaveCurrentWhisper,
+    onRelease: () => {}
+  });
 
   const closeWhisper = useCallback(
     async (whisper: Whisper) => {
@@ -647,6 +834,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         tiles.push({
           key: `local-${publication.trackSid}`,
           identity,
+          trackSid: publication.trackSid,
           track: publication.track,
           isLocal: true
         });
@@ -662,6 +850,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         tiles.push({
           key: `${participant.identity}-${publication.trackSid}`,
           identity: participant.identity,
+          trackSid: publication.trackSid,
           track: publication.track as RemoteTrack,
           isLocal: false
         });
@@ -750,11 +939,15 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           {videoTiles.map((tile, index) => {
             const isSpotlight = spotlightIdentity && tile.identity === spotlightIdentity;
             const isActiveSpeaker = activeSpeakers.has(tile.identity);
+            const isInviteSelected = !tile.isLocal && selectedParticipantIds.has(tile.identity);
             return (
               <article
+                data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
                 className={`relative rounded-lg border bg-slate-900/80 p-2 ${
                   isSpotlight ? "border-amber-300" : "border-slate-700"
                 } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""} ${
+                  isInviteSelected ? "ring-2 ring-sky-400/70" : ""
+                } ${
                   index === 0 && isSpotlight && followSpotlight ? "md:col-span-2 xl:col-span-3" : ""
                 }`}
                 key={tile.key}
@@ -770,13 +963,25 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                     {tile.identity}
                     {tile.isLocal ? " (you)" : ""}
                   </span>
-                  <button
-                    className="btn px-2 py-1 text-[11px]"
-                    onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
-                    type="button"
-                  >
-                    {isSpotlight ? "Unspotlight" : "Spotlight"}
-                  </button>
+                  <div className="flex gap-1">
+                    {!tile.isLocal && (
+                      <button
+                        className="btn px-2 py-1 text-[11px]"
+                        onClick={() => toggleParticipantSelection(tile.identity)}
+                        type="button"
+                        data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
+                      >
+                        {isInviteSelected ? "Selected" : "Select"}
+                      </button>
+                    )}
+                    <button
+                      className="btn px-2 py-1 text-[11px]"
+                      onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
+                      type="button"
+                    >
+                      {isSpotlight ? "Unspotlight" : "Spotlight"}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
@@ -823,11 +1028,25 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           </button>
         </div>
 
-        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
-          Hold <strong>V</strong> to talk in selected whisper. Main audio ducking: {(mainVolume * 100).toFixed(0)}%.
-          <br />
-          PTT: {isPttActive ? "active" : "idle"}
+        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300" data-testid="whisper-selected-invitees">
+          Selected invitees: {selectedParticipants.length > 0 ? selectedParticipants.join(", ") : "none"}
         </div>
+
+        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300" data-testid="whisper-ptt-panel">
+          Hold <strong>V</strong> to talk in selected whisper. Press <strong>G</strong> to leave your current whisper.
+          Main audio ducking: {(mainVolume * 100).toFixed(0)}%.
+          <br />
+          <span data-testid="whisper-ptt-status">PTT: {isPttActive ? "active" : "idle"}</span>
+        </div>
+
+        {whisperNotice && (
+          <div
+            className="rounded-md border border-amber-400/70 bg-amber-950/40 p-3 text-xs text-amber-200"
+            data-testid="whisper-notice"
+          >
+            {whisperNotice}
+          </div>
+        )}
 
         <ul className="space-y-2">
           {Object.values(whispers).length === 0 && (
@@ -839,26 +1058,59 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
             const isMember = whisper.members.includes(identity);
             const isSelected = selectedWhisperId === whisper.id;
             return (
-              <li key={whisper.id} className="rounded-md border border-slate-700 bg-slate-900/50 p-3">
+              <li
+                key={whisper.id}
+                className="rounded-md border border-slate-700 bg-slate-900/50 p-3"
+                data-testid={`whisper-card-${whisper.id}`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium">{whisper.title || `Whisper ${whisper.id.slice(0, 6)}`}</p>
-                    <p className="mt-1 text-xs text-slate-300">Members: {whisper.members.join(", ")}</p>
+                    <p className="mt-1 text-xs text-slate-300" data-testid={`whisper-members-${whisper.id}`}>
+                      Members: {whisper.members.join(", ")}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    <button className="btn px-2 py-1 text-[11px]" onClick={() => setSelectedWhisperId(whisper.id)}>
+                    <button
+                      className="btn px-2 py-1 text-[11px]"
+                      onClick={() => setSelectedWhisperId(whisper.id)}
+                      type="button"
+                    >
                       {isSelected ? "Selected" : "Select"}
                     </button>
                     {isMember ? (
-                      <button className="btn px-2 py-1 text-[11px]" onClick={() => void leaveWhisper(whisper)}>
-                        Leave
-                      </button>
+                      <>
+                        {selectedParticipants.length > 0 && (
+                          <button
+                            className="btn px-2 py-1 text-[11px]"
+                            onClick={() => void addSelectedParticipantsToWhisper(whisper)}
+                            type="button"
+                          >
+                            Add Selected
+                          </button>
+                        )}
+                        <button
+                          className="btn px-2 py-1 text-[11px]"
+                          onClick={() => void leaveWhisper(whisper)}
+                          type="button"
+                        >
+                          Leave
+                        </button>
+                      </>
                     ) : (
-                      <button className="btn px-2 py-1 text-[11px]" onClick={() => void joinWhisper(whisper)}>
+                      <button
+                        className="btn px-2 py-1 text-[11px]"
+                        onClick={() => void joinWhisper(whisper)}
+                        type="button"
+                      >
                         Join
                       </button>
                     )}
-                    <button className="btn px-2 py-1 text-[11px]" onClick={() => void closeWhisper(whisper)}>
+                    <button
+                      className="btn px-2 py-1 text-[11px]"
+                      onClick={() => void closeWhisper(whisper)}
+                      type="button"
+                    >
                       Close
                     </button>
                   </div>

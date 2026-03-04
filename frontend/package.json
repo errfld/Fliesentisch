@@ -9,14 +9,20 @@
     "start": "vite preview --host 0.0.0.0 --port 3000",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "clients:start": "bash ./scripts/multi-clients.sh start",
+    "clients:stop": "bash ./scripts/multi-clients.sh stop",
+    "clients:list": "bash ./scripts/multi-clients.sh list",
+    "test:e2e": "pnpm --dir .. compose:up && playwright test -c playwright.config.ts",
+    "test:e2e:headed": "pnpm --dir .. compose:up && playwright test -c playwright.config.ts --headed",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.20",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-router": "^1.163.3",
     "@tanstack/react-start": "^1.166.1",
     "@tanstack/router-plugin": "^1.164.0",
-    "@livekit/components-react": "^2.9.20",
     "livekit-client": "^2.17.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -25,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.55.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "25.3.3",
     "@types/react": "19.2.14",
