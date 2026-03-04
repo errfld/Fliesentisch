@@ -54,15 +54,18 @@ close_session() {
   while kill -0 "$close_pid" 2>/dev/null; do
     if (( waited >= PWCLI_CLOSE_TIMEOUT_SEC )); then
       kill "$close_pid" >/dev/null 2>&1 || true
-      wait "$close_pid" >/dev/null 2>&1 || true
+      if wait "$close_pid" >/dev/null 2>&1; then
+        :
+      fi
       return 1
     fi
     sleep 1
     waited=$((waited + 1))
   done
 
-  wait "$close_pid" >/dev/null 2>&1 || true
-  return 0
+  local wait_status=0
+  wait "$close_pid" >/dev/null 2>&1 || wait_status=$?
+  return "$wait_status"
 }
 
 resolve_names() {
@@ -97,7 +100,7 @@ resolve_names() {
     exit 1
   fi
 
-  echo "${trimmed[@]}"
+  printf '%s\n' "${trimmed[@]}"
 }
 
 start_clients() {
@@ -107,7 +110,7 @@ start_clients() {
   fi
 
   local -a names
-  read -r -a names <<<"$(resolve_names "$@")"
+  mapfile -t names < <(resolve_names "$@")
 
   local room_encoded
   room_encoded="$(urlencode "$ROOM")"
