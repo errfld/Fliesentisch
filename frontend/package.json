@@ -9,7 +9,10 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "clients:start": "bash ./scripts/multi-clients.sh start",
+    "clients:stop": "bash ./scripts/multi-clients.sh stop",
+    "clients:list": "bash ./scripts/multi-clients.sh list"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.20",

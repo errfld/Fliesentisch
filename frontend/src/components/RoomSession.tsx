@@ -46,6 +46,25 @@ type AudioTrackItem = {
 };
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+const MEDIA_ACCESS_ERROR =
+  "Microphone/camera access requires HTTPS (or localhost) and browser permission to use media devices.";
+
+function canAccessMediaDevices(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.isSecureContext && navigator.mediaDevices?.getUserMedia);
+}
+
+function formatConnectionError(err: unknown, fallback: string): string {
+  const message = err instanceof Error ? err.message : fallback;
+  const normalized = message.toLowerCase();
+  if (normalized.includes("getusermedia") || normalized.includes("mediadevices")) {
+    return MEDIA_ACCESS_ERROR;
+  }
+  return message;
+}
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
@@ -200,12 +219,21 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     const lkRoom = new Room({ adaptiveStream: true, dynacast: true });
 
     const connect = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        setIsConnecting(false);
+        return;
+      }
+
+      let mainTrack: LocalAudioTrack | null = null;
+      let publication: LocalTrackPublication | null = null;
+
       try {
         setIsConnecting(true);
         setError(null);
         await lkRoom.connect(livekitUrl, token);
-        const mainTrack = await createLocalAudioTrack();
-        const publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
+        mainTrack = await createLocalAudioTrack();
+        publication = await lkRoom.localParticipant.publishTrack(mainTrack, { name: "main" });
 
         if (cancelled) {
           mainTrack.stop();
@@ -219,7 +247,19 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         setRoom(lkRoom);
         setIsConnecting(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to connect to LiveKit");
+        if (mainTrack && publication) {
+          try {
+            await lkRoom.localParticipant.unpublishTrack(mainTrack);
+          } catch {
+            // Best-effort cleanup for partially initialized local tracks.
+          }
+        }
+        mainTrack?.stop();
+        mainTrackRef.current = null;
+        mainPubRef.current = null;
+        lkRoom.disconnect();
+        setRoom(null);
+        setError(formatConnectionError(err, "Failed to connect to LiveKit"));
         setIsConnecting(false);
       }
     };
@@ -359,6 +399,11 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
   useEffect(() => {
     const loadDevices = async () => {
+      if (!canAccessMediaDevices()) {
+        setError(MEDIA_ACCESS_ERROR);
+        return;
+      }
+
       try {
         const [audios, videos] = await Promise.all([
           Room.getLocalDevices("audioinput"),
@@ -374,7 +419,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           setSelectedVideoDevice((current) => current || videos[0].deviceId);
         }
       } catch (deviceError) {
-        setError(deviceError instanceof Error ? deviceError.message : "Failed to query devices");
+        setError(formatConnectionError(deviceError, "Failed to query media devices"));
       }
     };
 
@@ -502,15 +547,25 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
-    const track = await createLocalVideoTrack(
-      selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
-    );
-    const publication = await room.localParticipant.publishTrack(track);
+    let track: LocalVideoTrack | null = null;
 
-    cameraTrackRef.current = track;
-    cameraPubRef.current = publication;
-    setCameraEnabled(true);
-    setRenderTick((tick) => tick + 1);
+    try {
+      track = await createLocalVideoTrack(
+        selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
+      );
+      const publication = await room.localParticipant.publishTrack(track);
+
+      cameraTrackRef.current = track;
+      cameraPubRef.current = publication;
+      setCameraEnabled(true);
+      setRenderTick((tick) => tick + 1);
+    } catch (cameraError) {
+      track?.stop();
+      cameraTrackRef.current = null;
+      cameraPubRef.current = null;
+      setCameraEnabled(false);
+      setError(formatConnectionError(cameraError, "Failed to enable camera"));
+    }
   }, [room, selectedVideoDevice]);
 
   const onSelectAudioDevice = useCallback(
