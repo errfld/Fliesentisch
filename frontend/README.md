@@ -50,3 +50,19 @@ pnpm clients:stop
 Notes:
 - Run the app locally (`pnpm dev`) before starting clients.
 - This launcher uses fake media devices and auto-grants mic/camera permissions to avoid prompt friction.
+
+## E2E
+
+Run Playwright whisper e2e tests (multi-client, selection, `V`/`G` flows):
+Run these commands from the repository root.
+
+```bash
+cp infrastructure/.env.example infrastructure/.env
+pnpm --filter frontend test:e2e:install
+pnpm --filter frontend test:e2e
+```
+
+Optional:
+
+- `E2E_BASE_URL` (default `http://127.0.0.1:3100`)
+- `E2E_ROOM` (default `dnd-table-1`)
