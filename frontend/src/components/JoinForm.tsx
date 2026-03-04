@@ -16,7 +16,7 @@ export function JoinForm() {
 
     void navigate({
       to: "/room/$room",
-      params: { room: room.trim() || "dnd-table-1" },
+      params: { room: room.trim() || DEFAULT_ROOM },
       search: {
         name: name.trim() || "Player",
         joinKey: joinKey.trim() || undefined

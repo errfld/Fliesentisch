@@ -12,6 +12,7 @@ import { enforceSingleWhisperMembership } from "@/lib/whisper-membership";
 export type WhisperCoreState = {
   localIdentity: string;
   whispers: Record<string, Whisper>;
+  closedWhisperUpdatedAts: Record<string, number>;
   selectedWhisperId?: string;
   mainVolume: number;
   spotlightIdentity?: string;
@@ -30,6 +31,7 @@ type WhisperActions = {
 const initialState: WhisperCoreState = {
   localIdentity: "",
   whispers: {},
+  closedWhisperUpdatedAts: {},
   selectedWhisperId: undefined,
   mainVolume: 1,
   spotlightIdentity: undefined,
@@ -83,6 +85,7 @@ export function reduceWhisperState(
 
   const nextSeen: Record<string, true> = { ...state.seenEventIds, [envelope.eventId]: true };
   let nextWhispers = { ...state.whispers };
+  let nextClosedWhisperUpdatedAts = { ...state.closedWhisperUpdatedAts };
   let nextSpotlight = state.spotlightIdentity;
 
   switch (envelope.type) {
@@ -90,17 +93,27 @@ export function reduceWhisperState(
       return { ...state, seenEventIds: nextSeen };
     }
     case "STATE_SNAPSHOT": {
-      nextWhispers = applySnapshot(nextWhispers, envelope as ProtocolEnvelope<"STATE_SNAPSHOT", StateSnapshotPayload>);
+      const snapshotResult = applySnapshot(
+        nextWhispers,
+        nextClosedWhisperUpdatedAts,
+        envelope as ProtocolEnvelope<"STATE_SNAPSHOT", StateSnapshotPayload>
+      );
+      nextWhispers = snapshotResult.whispers;
+      nextClosedWhisperUpdatedAts = snapshotResult.closedWhisperUpdatedAts;
       nextSpotlight = envelope.payload.spotlightIdentity ?? nextSpotlight;
       break;
     }
     case "WHISPER_CREATE":
     case "WHISPER_UPDATE": {
-      nextWhispers = applyWhisperUpsert(nextWhispers, envelope.payload);
+      const upsertResult = applyWhisperUpsert(nextWhispers, nextClosedWhisperUpdatedAts, envelope.payload);
+      nextWhispers = upsertResult.whispers;
+      nextClosedWhisperUpdatedAts = upsertResult.closedWhisperUpdatedAts;
       break;
     }
     case "WHISPER_CLOSE": {
-      nextWhispers = applyWhisperClose(nextWhispers, envelope.payload);
+      const closeResult = applyWhisperClose(nextWhispers, nextClosedWhisperUpdatedAts, envelope.payload);
+      nextWhispers = closeResult.whispers;
+      nextClosedWhisperUpdatedAts = closeResult.closedWhisperUpdatedAts;
       break;
     }
     case "SPOTLIGHT_UPDATE": {
@@ -124,6 +137,7 @@ export function reduceWhisperState(
   return {
     ...state,
     whispers: nextWhispers,
+    closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts,
     selectedWhisperId,
     spotlightIdentity: nextSpotlight,
     mainVolume: calculateMainVolume(nextWhispers, selectedWhisperId, state.localIdentity),
@@ -133,55 +147,107 @@ export function reduceWhisperState(
 
 function applySnapshot(
   current: Record<string, Whisper>,
+  closedWhisperUpdatedAts: Record<string, number>,
   envelope: ProtocolEnvelope<"STATE_SNAPSHOT", StateSnapshotPayload>
-): Record<string, Whisper> {
+): {
+  whispers: Record<string, Whisper>;
+  closedWhisperUpdatedAts: Record<string, number>;
+} {
   let merged = { ...current };
+  let nextClosedWhisperUpdatedAts = closedWhisperUpdatedAts;
   for (const whisper of envelope.payload.whispers) {
-    merged = applyWhisperUpsert(merged, whisper);
+    const upsertResult = applyWhisperUpsert(merged, nextClosedWhisperUpdatedAts, whisper);
+    merged = upsertResult.whispers;
+    nextClosedWhisperUpdatedAts = upsertResult.closedWhisperUpdatedAts;
   }
-  return merged;
+  return { whispers: merged, closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts };
 }
 
 function applyWhisperUpsert(
   current: Record<string, Whisper>,
+  closedWhisperUpdatedAts: Record<string, number>,
   incoming: Whisper
-): Record<string, Whisper> {
+): {
+  whispers: Record<string, Whisper>;
+  closedWhisperUpdatedAts: Record<string, number>;
+} {
+  const closedUpdatedAt = closedWhisperUpdatedAts[incoming.id];
+  if (closedUpdatedAt !== undefined && incoming.updatedAt <= closedUpdatedAt) {
+    return { whispers: current, closedWhisperUpdatedAts };
+  }
+
+  let nextClosedWhisperUpdatedAts = closedWhisperUpdatedAts;
+  if (closedUpdatedAt !== undefined && incoming.updatedAt > closedUpdatedAt) {
+    nextClosedWhisperUpdatedAts = { ...closedWhisperUpdatedAts };
+    delete nextClosedWhisperUpdatedAts[incoming.id];
+  }
+
   const existing = current[incoming.id];
   if (!existing) {
     return {
-      ...current,
-      [incoming.id]: normalizeWhisper(incoming)
+      whispers: {
+        ...current,
+        [incoming.id]: normalizeWhisper(incoming)
+      },
+      closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts
     };
   }
 
   if (incoming.updatedAt < existing.updatedAt) {
-    return current;
+    return { whispers: current, closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts };
   }
 
   const shouldReplace =
     incoming.updatedAt > existing.updatedAt || incoming.id.localeCompare(existing.id) >= 0;
   if (!shouldReplace) {
-    return current;
+    return { whispers: current, closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts };
   }
 
   return {
-    ...current,
-    [incoming.id]: normalizeWhisper(incoming)
+    whispers: {
+      ...current,
+      [incoming.id]: normalizeWhisper(incoming)
+    },
+    closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts
   };
 }
 
 function applyWhisperClose(
   current: Record<string, Whisper>,
+  closedWhisperUpdatedAts: Record<string, number>,
   payload: WhisperClosePayload
-): Record<string, Whisper> {
+): {
+  whispers: Record<string, Whisper>;
+  closedWhisperUpdatedAts: Record<string, number>;
+} {
+  const closedUpdatedAt = closedWhisperUpdatedAts[payload.id];
+  if (closedUpdatedAt !== undefined && payload.updatedAt <= closedUpdatedAt) {
+    return { whispers: current, closedWhisperUpdatedAts };
+  }
+
   const existing = current[payload.id];
-  if (!existing || payload.updatedAt < existing.updatedAt) {
-    return current;
+  if (existing && payload.updatedAt < existing.updatedAt) {
+    return { whispers: current, closedWhisperUpdatedAts };
+  }
+
+  const nextClosedWhisperUpdatedAts = {
+    ...closedWhisperUpdatedAts,
+    [payload.id]: payload.updatedAt
+  };
+
+  if (!existing) {
+    return {
+      whispers: current,
+      closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts
+    };
   }
 
   const next = { ...current };
   delete next[payload.id];
-  return next;
+  return {
+    whispers: next,
+    closedWhisperUpdatedAts: nextClosedWhisperUpdatedAts
+  };
 }
 
 function applySpotlight(current: string | undefined, payload: SpotlightPayload): string | undefined {

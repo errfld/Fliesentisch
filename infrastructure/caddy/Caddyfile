@@ -3,5 +3,8 @@
 }
 
 :80 {
+  @auth_api path /api/v1*
+  reverse_proxy @auth_api auth:8787
+
   reverse_proxy frontend:3000
 }
