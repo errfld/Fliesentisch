@@ -150,7 +150,10 @@ describe("reduceWhisperState", () => {
 
   it("merges snapshot whispers and applies spotlight identity from snapshot", () => {
     const snapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
-      whispers: [whisper("w1", 10), whisper("w2", 12)],
+      whispers: [
+        whisperWithMembers("w1", ["alice", "bob"], 10),
+        whisperWithMembers("w2", ["carol", "dave"], 12)
+      ],
       spotlightIdentity: "gm"
     });
 
