@@ -36,7 +36,9 @@ export function enforceSingleWhisperMembership(whispers: Record<string, Whisper>
       continue;
     }
 
-    remainingMembers.forEach((member) => claimedMembers.add(member));
+    remainingMembers.forEach((member) => {
+      claimedMembers.add(member);
+    });
 
     next[whisper.id] = {
       ...whisper,

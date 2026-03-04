@@ -775,10 +775,13 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return;
     }
 
+    const selected = selectedWhisperId ? whispers[selectedWhisperId] : undefined;
     const activeWhisper =
-      (selectedWhisperId ? whispers[selectedWhisperId] : undefined) ??
+      selected && selected.members.includes(identity)
+        ? selected
+        :
       Object.values(whispers).find((whisper) => whisper.members.includes(identity));
-    if (!activeWhisper || !activeWhisper.members.includes(identity)) {
+    if (!activeWhisper) {
       return;
     }
 
