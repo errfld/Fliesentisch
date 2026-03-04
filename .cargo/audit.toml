@@ -1,0 +1,5 @@
+[advisories]
+# rsa timing side-channel advisory (Marvin attack).
+# Current project threat model does not expose this path and no patched release exists yet.
+# Revisit when rsa/jsonwebtoken publish a fix.
+ignore = ["RUSTSEC-2023-0071"]
