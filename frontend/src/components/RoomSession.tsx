@@ -36,6 +36,7 @@ type RoomSessionProps = {
 type VideoTile = {
   key: string;
   identity: string;
+  trackSid: string;
   track: Track;
   isLocal: boolean;
 };
@@ -836,6 +837,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         tiles.push({
           key: `local-${publication.trackSid}`,
           identity,
+          trackSid: publication.trackSid,
           track: publication.track,
           isLocal: true
         });
@@ -851,6 +853,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         tiles.push({
           key: `${participant.identity}-${publication.trackSid}`,
           identity: participant.identity,
+          trackSid: publication.trackSid,
           track: publication.track as RemoteTrack,
           isLocal: false
         });
@@ -942,7 +945,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
             const isInviteSelected = !tile.isLocal && selectedParticipantIds.has(tile.identity);
             return (
               <article
-                data-testid={`video-tile-${tile.identity}`}
+                data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
                 className={`relative rounded-lg border bg-slate-900/80 p-2 ${
                   isSpotlight ? "border-amber-300" : "border-slate-700"
                 } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""} ${
@@ -969,7 +972,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                         className="btn px-2 py-1 text-[11px]"
                         onClick={() => toggleParticipantSelection(tile.identity)}
                         type="button"
-                        data-testid={`video-select-${tile.identity}`}
+                        data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
                       >
                         {isInviteSelected ? "Selected" : "Select"}
                       </button>
@@ -1089,7 +1092,11 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                             Add Selected
                           </button>
                         )}
-                        <button className="btn px-2 py-1 text-[11px]" onClick={() => void leaveWhisper(whisper)}>
+                        <button
+                          className="btn px-2 py-1 text-[11px]"
+                          onClick={() => void leaveWhisper(whisper)}
+                          type="button"
+                        >
                           Leave
                         </button>
                       </>

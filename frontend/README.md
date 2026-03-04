@@ -54,6 +54,7 @@ Notes:
 ## E2E
 
 Run Playwright whisper e2e tests (multi-client, selection, `V`/`G` flows):
+Run these commands from the repository root.
 
 ```bash
 cp infrastructure/.env.example infrastructure/.env

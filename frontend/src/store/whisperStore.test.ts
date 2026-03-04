@@ -226,6 +226,26 @@ describe("reduceWhisperState", () => {
     expect(closed.mainVolume).toBe(1);
   });
 
+  it("clears selected whisper when local identity is no longer a member after enforcement", () => {
+    const selectedState: WhisperCoreState = {
+      ...baseState,
+      whispers: {
+        w1: whisperWithMembers("w1", ["alice", "bob", "dave"], 10)
+      },
+      selectedWhisperId: "w1",
+      mainVolume: 0.3
+    };
+
+    const updated = reduceWhisperState(
+      selectedState,
+      createEnvelope("WHISPER_CREATE", "carol", whisperWithMembers("w2", ["alice", "carol"], 20))
+    );
+
+    expect(updated.whispers.w1.members).toEqual(["bob", "dave"]);
+    expect(updated.selectedWhisperId).toBeUndefined();
+    expect(updated.mainVolume).toBe(1);
+  });
+
   it("keeps spotlight unchanged when SPOTLIGHT_UPDATE contains null identity", () => {
     const current: WhisperCoreState = {
       ...baseState,

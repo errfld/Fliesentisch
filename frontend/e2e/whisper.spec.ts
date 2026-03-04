@@ -35,7 +35,11 @@ async function ensureCameraOn(page: Page): Promise<void> {
 }
 
 async function waitForRemoteTile(page: Page, identity: string): Promise<void> {
-  await expect(page.getByTestId(`video-tile-${identity}`)).toBeVisible();
+  await expect(page.locator(`[data-testid^="video-tile-${identity}-"]`).first()).toBeVisible();
+}
+
+async function clickVideoSelect(page: Page, identity: string): Promise<void> {
+  await page.locator(`[data-testid^="video-select-${identity}-"]`).first().click();
 }
 
 async function whisperCardForMember(page: Page, memberIdentity: string) {
@@ -51,7 +55,7 @@ test.describe("whisper multi-client flows", () => {
       await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
       await waitForRemoteTile(alice.page, bob.identity);
 
-      await alice.page.getByTestId(`video-select-${bob.identity}`).click();
+      await clickVideoSelect(alice.page, bob.identity);
       await alice.page.getByRole("button", { name: "New Whisper" }).click();
 
       const aliceCard = await whisperCardForMember(alice.page, bob.identity);
@@ -84,11 +88,11 @@ test.describe("whisper multi-client flows", () => {
       await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page), ensureCameraOn(carol.page)]);
       await Promise.all([waitForRemoteTile(alice.page, bob.identity), waitForRemoteTile(alice.page, carol.identity)]);
 
-      await alice.page.getByTestId(`video-select-${bob.identity}`).click();
+      await clickVideoSelect(alice.page, bob.identity);
       await alice.page.getByRole("button", { name: "New Whisper" }).click();
       await expect(await whisperCardForMember(alice.page, bob.identity)).toContainText(alice.identity);
 
-      await alice.page.getByTestId(`video-select-${carol.identity}`).click();
+      await clickVideoSelect(alice.page, carol.identity);
       await alice.page.getByRole("button", { name: "New Whisper" }).click();
 
       const memberRows = alice.page.locator("p[data-testid^='whisper-members-']");

@@ -30,17 +30,13 @@ export function enforceSingleWhisperMembership(whispers: Record<string, Whisper>
   const next: Record<string, Whisper> = {};
 
   for (const whisper of sorted) {
-    const remainingMembers = whisper.members.filter((member) => {
-      if (claimedMembers.has(member)) {
-        return false;
-      }
-      claimedMembers.add(member);
-      return true;
-    });
+    const remainingMembers = whisper.members.filter((member) => !claimedMembers.has(member));
 
     if (remainingMembers.length < 2) {
       continue;
     }
+
+    remainingMembers.forEach((member) => claimedMembers.add(member));
 
     next[whisper.id] = {
       ...whisper,
