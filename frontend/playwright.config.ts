@@ -28,7 +28,7 @@ export default defineConfig({
     }
   },
   webServer: {
-    command: "pnpm dev --hostname 127.0.0.1 --port 3100",
+    command: "pnpm dev --host 127.0.0.1 --port 3100",
     url: baseURL,
     reuseExistingServer: false,
     stdout: "pipe",
