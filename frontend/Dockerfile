@@ -1,10 +1,12 @@
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 RUN corepack enable
-ARG NEXT_PUBLIC_LIVEKIT_URL=ws://localhost:7880
-ARG NEXT_PUBLIC_DEFAULT_ROOM=dnd-table-1
-ENV NEXT_PUBLIC_LIVEKIT_URL=$NEXT_PUBLIC_LIVEKIT_URL
-ENV NEXT_PUBLIC_DEFAULT_ROOM=$NEXT_PUBLIC_DEFAULT_ROOM
+ARG VITE_LIVEKIT_URL=ws://localhost:7880
+ARG VITE_DEFAULT_ROOM=dnd-table-1
+ARG VITE_JOIN_KEY=
+ENV VITE_LIVEKIT_URL=$VITE_LIVEKIT_URL
+ENV VITE_DEFAULT_ROOM=$VITE_DEFAULT_ROOM
+ENV VITE_JOIN_KEY=$VITE_JOIN_KEY
 COPY package.json ./
 RUN pnpm install --no-frozen-lockfile
 COPY . .
@@ -14,10 +16,6 @@ FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/next.config.mjs ./next.config.mjs
+COPY --from=builder /app ./
 EXPOSE 3000
 CMD ["pnpm", "start"]

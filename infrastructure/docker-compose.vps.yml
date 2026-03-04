@@ -28,8 +28,9 @@ services:
     restart: unless-stopped
     environment:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8787}
-      NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
-      NEXT_PUBLIC_DEFAULT_ROOM: ${NEXT_PUBLIC_DEFAULT_ROOM:-dnd-table-1}
+      VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL}
+      VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
+      VITE_JOIN_KEY: ${VITE_JOIN_KEY:-}
 
   caddy:
     image: caddy:2.8.4

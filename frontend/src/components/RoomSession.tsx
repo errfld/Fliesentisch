@@ -5,23 +5,17 @@ import {
   DisconnectReason,
   createLocalAudioTrack,
   createLocalVideoTrack,
-  LocalAudioTrack,
-  LocalTrackPublication,
-  LocalVideoTrack,
-  RemoteTrack,
   Room,
   RoomEvent,
   Track
 } from "livekit-client";
+import type { LocalAudioTrack, LocalTrackPublication, LocalVideoTrack, RemoteTrack } from "livekit-client";
 import { createUuid, getOrCreateClientId, toIdentity } from "@/lib/client-id";
 import {
-  AnyProtocolEnvelope,
   createEnvelope,
-  parseProtocolEnvelope,
-  SpotlightPayload,
-  Whisper,
-  WhisperClosePayload
+  parseProtocolEnvelope
 } from "@/lib/protocol";
+import type { AnyProtocolEnvelope, SpotlightPayload, Whisper, WhisperClosePayload } from "@/lib/protocol";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 import { useWhisperStore } from "@/store/whisperStore";
 import { TrackElement } from "@/components/TrackElement";
@@ -45,7 +39,7 @@ type AudioTrackItem = {
   isMain: boolean;
 };
 
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
@@ -57,7 +51,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [renderTick, setRenderTick] = useState(0);
+  const [, setRenderTick] = useState(0);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
   const [isPttActive, setIsPttActive] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);

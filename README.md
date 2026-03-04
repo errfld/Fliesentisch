@@ -13,7 +13,7 @@ Local-first monorepo for a LiveKit-based DnD virtual table with whisper audio ch
 
 ## Structure
 
-- `frontend`: Next.js + TypeScript + LiveKit UI
+- `frontend`: TanStack Start + TypeScript + LiveKit UI
 - `backend`: Rust axum token service
 - `infrastructure`: docker compose, Caddy, LiveKit config, deploy scripts
 - `docs/contracts`: protocol and API contracts
