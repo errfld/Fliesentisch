@@ -2,7 +2,7 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 RUN corepack enable
 
-ARG VITE_LIVEKIT_URL=ws://localhost:7880
+ARG VITE_LIVEKIT_URL
 ARG VITE_DEFAULT_ROOM=dnd-table-1
 ARG VITE_JOIN_KEY=
 ENV VITE_LIVEKIT_URL=$VITE_LIVEKIT_URL

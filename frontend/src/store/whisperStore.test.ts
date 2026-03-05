@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEnvelope } from "@/lib/protocol";
-import { calculateMainVolume, reduceWhisperState } from "@/store/whisperStore";
+import { calculateMainVolume, MAX_CLOSED_WHISPERS, reduceWhisperState } from "@/store/whisperStore";
 import type { Whisper } from "@/lib/protocol";
 import type { WhisperCoreState } from "@/store/whisperStore";
 
@@ -238,6 +238,9 @@ describe("reduceWhisperState", () => {
       })
     );
 
+    expect(closed.whispers.w1).toBeUndefined();
+    expect(closed.closedWhisperUpdatedAts.w1).toBe(11);
+
     const recreated = reduceWhisperState(
       closed,
       createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 12))
@@ -245,6 +248,24 @@ describe("reduceWhisperState", () => {
 
     expect(recreated.whispers.w1).toBeDefined();
     expect(recreated.closedWhisperUpdatedAts.w1).toBeUndefined();
+  });
+
+  it("caps closed whisper tombstones to avoid unbounded growth", () => {
+    let nextState = baseState;
+
+    for (let index = 0; index < MAX_CLOSED_WHISPERS + 5; index += 1) {
+      nextState = reduceWhisperState(
+        nextState,
+        createEnvelope("WHISPER_CLOSE", "alice", {
+          id: `w${index}`,
+          updatedAt: index + 1
+        })
+      );
+    }
+
+    expect(Object.keys(nextState.closedWhisperUpdatedAts)).toHaveLength(MAX_CLOSED_WHISPERS);
+    expect(nextState.closedWhisperUpdatedAts.w0).toBeUndefined();
+    expect(nextState.closedWhisperUpdatedAts[`w${MAX_CLOSED_WHISPERS + 4}`]).toBe(MAX_CLOSED_WHISPERS + 5);
   });
 
   it("clears selected whisper and restores main volume when selected whisper closes", () => {

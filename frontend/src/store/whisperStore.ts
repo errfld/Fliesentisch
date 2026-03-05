@@ -9,6 +9,8 @@ import type {
 } from "@/lib/protocol";
 import { enforceSingleWhisperMembership } from "@/lib/whisper-membership";
 
+export const MAX_CLOSED_WHISPERS = 256;
+
 export type WhisperCoreState = {
   localIdentity: string;
   whispers: Record<string, Whisper>;
@@ -230,10 +232,11 @@ function applyWhisperClose(
     return { whispers: current, closedWhisperUpdatedAts };
   }
 
-  const nextClosedWhisperUpdatedAts = {
-    ...closedWhisperUpdatedAts,
-    [payload.id]: payload.updatedAt
-  };
+  const nextClosedWhisperUpdatedAts = addClosedWhisperTimestamp(
+    closedWhisperUpdatedAts,
+    payload.id,
+    payload.updatedAt
+  );
 
   if (!existing) {
     return {
@@ -260,6 +263,32 @@ function normalizeWhisper(whisper: Whisper): Whisper {
     createdAt: whisper.createdAt || whisper.updatedAt,
     members: Array.from(new Set(whisper.members))
   };
+}
+
+function addClosedWhisperTimestamp(
+  closedWhisperUpdatedAts: Record<string, number>,
+  id: string,
+  updatedAt: number
+): Record<string, number> {
+  const next = {
+    ...closedWhisperUpdatedAts,
+    [id]: updatedAt
+  };
+
+  const ids = Object.keys(next);
+  if (ids.length <= MAX_CLOSED_WHISPERS) {
+    return next;
+  }
+
+  const oldest = Object.entries(next)
+    .sort((a, b) => (a[1] === b[1] ? a[0].localeCompare(b[0]) : a[1] - b[1]))
+    .slice(0, ids.length - MAX_CLOSED_WHISPERS);
+
+  for (const [oldestId] of oldest) {
+    delete next[oldestId];
+  }
+
+  return next;
 }
 
 function enforceWhisperLimit(whispers: Record<string, Whisper>): Record<string, Whisper> {
