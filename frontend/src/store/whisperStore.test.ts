@@ -220,6 +220,9 @@ describe("reduceWhisperState", () => {
       })
     );
 
+    expect(closed.whispers.w1).toBeUndefined();
+    expect(closed.closedWhisperUpdatedAts.w1).toBe(11);
+
     const staleSnapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
       whispers: [whisper("w1", 10)],
       spotlightIdentity: null
