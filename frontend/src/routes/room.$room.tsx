@@ -22,7 +22,7 @@ function RoomPage() {
   const joinKey = search.joinKey?.trim() || undefined;
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-canvas via-[#111722] to-[#0a0d13] p-4 md:p-6">
+    <main className="min-h-screen bg-[#0d1214] bg-[radial-gradient(circle_at_top_left,rgba(174,118,57,0.12),transparent_24%),radial-gradient(circle_at_80%_0%,rgba(29,69,63,0.14),transparent_28%),linear-gradient(180deg,#101518_0%,#0c1114_100%)] p-4 md:p-6">
       <RoomSessionClient roomName={room} displayName={displayName} joinKey={joinKey} />
     </main>
   );
