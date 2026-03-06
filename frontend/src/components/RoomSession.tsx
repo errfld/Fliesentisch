@@ -944,51 +944,43 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
   return (
     <>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.75fr)_18rem]">
-        <section className="rounded-[2rem] border border-[#28574f] bg-[linear-gradient(180deg,_rgba(13,37,33,0.94),_rgba(8,20,18,0.98))] p-4 shadow-[0_36px_120px_rgba(0,0,0,0.42)] md:p-5">
-          <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mx-auto grid max-w-[1480px] gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <section className="rounded-[28px] border border-[#394643] bg-[#131b1e]/90 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.4)]">
+          <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#33403d] pb-5">
             <div>
               <h2 className="sr-only">Room: {roomName}</h2>
-              <p className="text-[11px] uppercase tracking-[0.28em] text-[#9fc6bc]">Connected</p>
-              <p className="mt-2 text-sm text-[#d8e7e3]">{displayName}</p>
+              <p className="text-sm text-[#c7d0ca]">Playing as {displayName}</p>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[#99aaa4]">
+                <span>{participantRoster.length} online</span>
+                <span>{activeWhispers.length} whisper{activeWhispers.length === 1 ? "" : "s"}</span>
+                <span>Spotlight {spotlightIdentity ? formatIdentityLabel(spotlightIdentity) : "auto"}</span>
+              </div>
               <p className="sr-only">
                 You are <span className="font-mono">{identity}</span>
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button className="btn border-[#2d6057] bg-[#112823] hover:bg-[#17342e]" onClick={toggleMic} type="button">
+              <button className="btn" onClick={toggleMic} type="button">
                 {micEnabled ? "Mute" : "Unmute"}
               </button>
-              <button className="btn border-[#2d6057] bg-[#112823] hover:bg-[#17342e]" onClick={toggleCamera} type="button">
+              <button className="btn" onClick={toggleCamera} type="button">
                 {cameraEnabled ? "Camera Off" : "Camera On"}
               </button>
-              <button className="btn border-[#6f4d37] bg-[#2a1b15] hover:bg-[#38231c]" onClick={() => room.disconnect()} type="button">
+              <button className="btn" onClick={() => room.disconnect()} type="button">
                 Leave
               </button>
             </div>
           </header>
 
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <div className="rounded-full border border-[#2f655b] bg-[#112b25]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#c8ddd7]">
-              {participantRoster.length} online
-            </div>
-            <div className="rounded-full border border-[#356d85] bg-[#152a33]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#cfe2f0]">
-              {activeWhispers.length} whisper{activeWhispers.length === 1 ? "" : "s"}
-            </div>
-            <div className="rounded-full border border-[#755337] bg-[#2a1b15]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#edd4b5]">
-              {spotlightIdentity ? `Spotlight ${formatIdentityLabel(spotlightIdentity)}` : "Spotlight auto"}
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-[1.8rem] border border-[#2a5d55] bg-[linear-gradient(180deg,_rgba(16,44,39,0.88),_rgba(10,24,22,0.96))] p-4">
-            <div className="flex items-center justify-between gap-4">
+          <div className="mt-6 overflow-hidden rounded-[24px] border border-[#34413f] bg-[#0e1518]/92">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#33403d] bg-[#141d20]/88 px-5 py-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-[#bdd6cd]">Spotlight</p>
-                <h3 className="mt-2 text-3xl text-[#f4e2c3]">
-                  {stageTile ? formatIdentityLabel(stageTile.identity) : "Shared stage"}
-                </h3>
+                <p className="display-face text-[1.7rem] text-[#efdfc4]">Spotlight</p>
+                <p className="mt-1 text-sm text-[#aab8b2]">
+                  {stageTile ? "Pinned to the room's main view." : "Waiting for a camera to take the stage."}
+                </p>
               </div>
-              <label className="hidden items-center gap-2 rounded-full border border-[#2f655b] bg-[#102a25] px-3 py-2 text-xs text-[#cde1db] lg:flex">
+              <label className="hidden items-center gap-2 text-sm text-[#c4cec8] lg:flex">
                 <input
                   type="checkbox"
                   checked={followSpotlight}
@@ -1002,8 +994,8 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
               <article
                 key={stageTile.key}
                 data-testid={`video-tile-${stageTile.identity}-${stageTile.trackSid}`}
-                className={`relative mt-4 overflow-hidden rounded-[1.6rem] border bg-black ${
-                  stageTile.identity === spotlightIdentity ? "border-amber-300" : "border-[#2a5d55]"
+                className={`relative overflow-hidden bg-black ${
+                  stageTile.identity === spotlightIdentity ? "border-b border-[#d39b58]" : "border-b border-[#33403d]"
                 } ${activeSpeakers.has(stageTile.identity) ? "ring-2 ring-emerald-400/70" : ""}`}
               >
                 <TrackElement
@@ -1012,25 +1004,24 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                   muted={stageTile.isLocal}
                   className="aspect-[21/9] w-full bg-black object-cover"
                 />
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,_transparent,_rgba(5,10,10,0.82))]" />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.04)_0%,rgba(3,7,8,0.18)_44%,rgba(5,9,11,0.88)_100%)]" />
                 <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-4">
                   <div>
-                    <div className="inline-flex items-center rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/80 backdrop-blur-sm">
-                      {stageTile.identity === spotlightIdentity ? "Spotlight" : "Live"}
-                    </div>
-                    <p className="mt-3 text-2xl text-[#fff0da]">
+                    <p className="display-face text-[2.1rem] leading-none text-[#f7efe2]">
                       {formatIdentityLabel(stageTile.identity)}
                       {stageTile.isLocal ? " (you)" : ""}
                     </p>
-                    <p className="mt-1 text-sm text-white/70">{activeSpeakers.has(stageTile.identity) ? "Speaking now" : "At table"}</p>
+                    <p className="mt-2 text-sm text-[#d5ddd8]/78">
+                      {activeSpeakers.has(stageTile.identity) ? "Speaking now" : "Present at the table"}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {!stageTile.isLocal && (
                       <button
-                        className={`rounded-full border px-3 py-2 text-xs uppercase tracking-[0.2em] backdrop-blur-sm ${
+                        className={`rounded-lg border px-3 py-2 text-xs ${
                           selectedParticipantIds.has(stageTile.identity)
-                            ? "border-sky-300 bg-sky-500/20 text-sky-100"
-                            : "border-white/20 bg-black/35 text-white/80 hover:border-sky-300/60"
+                            ? "border-[#d39b58] bg-[#6b4b24]/30 text-[#f3ddbf]"
+                            : "border-[#64706d] bg-black/30 text-[#ecf0ed]/82 hover:border-[#7f8a87]"
                         }`}
                         onClick={() => toggleParticipantSelection(stageTile.identity)}
                         type="button"
@@ -1040,7 +1031,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                       </button>
                     )}
                     <button
-                      className="rounded-full border border-white/20 bg-black/35 px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/80 backdrop-blur-sm hover:border-amber-300/70"
+                      className="rounded-lg border border-[#64706d] bg-black/30 px-3 py-2 text-xs text-[#ecf0ed]/82 hover:border-[#7f8a87]"
                       onClick={() => void setSpotlight(spotlightIdentity === stageTile.identity ? null : stageTile.identity)}
                       type="button"
                     >
@@ -1050,10 +1041,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                 </div>
 
                 {selfPreviewTile && (
-                  <div className="absolute bottom-4 right-4 z-10 w-[7.5rem] sm:w-[9rem]">
+                  <div className="absolute right-4 top-4 z-10 w-[6.5rem] sm:w-[8rem]">
                     <article
                       data-testid={`video-tile-${selfPreviewTile.identity}-${selfPreviewTile.trackSid}`}
-                      className="overflow-hidden rounded-[1rem] border border-[#2a5d55] bg-black shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
+                      className="overflow-hidden rounded-xl border border-[#6e7671] bg-black/90 shadow-[0_14px_35px_rgba(0,0,0,0.35)]"
                     >
                       <TrackElement
                         track={selfPreviewTile.track}
@@ -1061,19 +1052,19 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                         muted
                         className="aspect-[4/5] w-full bg-black object-cover"
                       />
-                      <div className="bg-black/70 px-3 py-2 text-xs text-white/75">You</div>
+                      <div className="bg-black/70 px-3 py-2 text-xs text-[#ece9e1]/80">You</div>
                     </article>
                   </div>
                 )}
               </article>
             ) : (
-              <div className="mt-4 rounded-[1.6rem] border border-dashed border-[#2a5d55] bg-[#091614] p-10 text-center text-sm text-[#b8d3cb]">
-                No video tracks yet. Enable a camera and spotlight will take over this stage.
+              <div className="m-4 rounded-[20px] border border-dashed border-[#53605d] bg-[#0c1215] p-14 text-center text-sm text-[#b1bdb7]">
+                No video tracks yet. Enable a camera to appear on stage.
               </div>
             )}
 
             {railTiles.length > 0 && (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 border-t border-[#33403d] bg-[#121a1d]/90 p-4 md:grid-cols-3">
                 {railTiles.map((tile) => {
                   const isSpotlight = tile.identity === spotlightIdentity;
                   const isSelectedForInvite = !tile.isLocal && selectedParticipantIds.has(tile.identity);
@@ -1083,8 +1074,8 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                     <article
                       key={tile.key}
                       data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
-                      className={`overflow-hidden rounded-[1.15rem] border bg-black ${
-                        isSpotlight ? "border-amber-300" : "border-[#295c53]"
+                      className={`overflow-hidden rounded-[18px] border bg-black ${
+                        isSpotlight ? "border-[#d39b58]" : "border-[#495552]"
                       } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""}`}
                     >
                       <TrackElement
@@ -1093,24 +1084,24 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                         muted={tile.isLocal}
                         className="aspect-[16/10] w-full bg-black object-cover"
                       />
-                      <div className="border-t border-white/5 bg-[linear-gradient(180deg,_rgba(11,25,23,0.96),_rgba(8,18,17,0.98))] p-3">
+                      <div className="border-t border-[#33403d] bg-[#141d20] p-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[#f2e3cd]">
+                            <p className="truncate text-sm font-medium text-[#edf2ee]">
                               {formatIdentityLabel(tile.identity)}
                               {tile.isLocal ? " (you)" : ""}
                             </p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#9fc6bc]">
-                              {isActiveSpeaker ? "Speaking" : "Live"}
+                            <p className="mt-1 text-xs text-[#9fb0aa]">
+                              {isActiveSpeaker ? "Speaking" : "At table"}
                             </p>
                           </div>
                           <div className="flex gap-1">
                             {!tile.isLocal && (
                               <button
-                                className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] ${
+                                className={`rounded-lg border px-2.5 py-1 text-[11px] ${
                                   isSelectedForInvite
-                                    ? "border-sky-300 bg-sky-500/20 text-sky-100"
-                                    : "border-[#36675e] bg-[#112823] text-[#d0e5de]"
+                                    ? "border-[#d39b58] bg-[#6b4b24]/30 text-[#f3ddbf]"
+                                    : "border-[#5b6864] bg-[#1b2528] text-[#dce4df]"
                                 }`}
                                 onClick={() => toggleParticipantSelection(tile.identity)}
                                 type="button"
@@ -1120,7 +1111,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                               </button>
                             )}
                             <button
-                              className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                              className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                               onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
                               type="button"
                             >
@@ -1138,23 +1129,23 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
         </section>
 
         <aside className="grid gap-4">
-          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">Whispers</p>
+              <h3 className="display-face text-[1.55rem] text-[#efdcbf]">Whispers</h3>
               <button className="btn btn-accent px-3 py-2" onClick={() => void createWhisper()} type="button">
                 New Whisper
               </button>
             </div>
 
             <div
-              className="mt-4 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3 text-xs text-[#d3e8df]"
+              className="mt-4 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3 text-xs text-[#b6c3bc]"
               data-testid="whisper-selected-invitees"
             >
               Selected invitees: {selectedParticipants.length > 0 ? selectedParticipants.map(formatIdentityLabel).join(", ") : "none"}
             </div>
 
             <div
-              className="mt-3 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3 text-xs text-[#d3e8df]"
+              className="mt-3 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3 text-xs text-[#b6c3bc]"
               data-testid="whisper-ptt-panel"
             >
               {selectedWhisper ? `Selected whisper: ${getWhisperLabel(selectedWhisper)}` : "No whisper selected"}
@@ -1166,7 +1157,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
             {whisperNotice && (
               <div
-                className="mt-3 rounded-[1rem] border border-amber-400/70 bg-amber-950/30 px-3 py-3 text-xs text-amber-200"
+                className="mt-3 rounded-[16px] border border-[#c79655] bg-[#3d2912]/45 px-3 py-3 text-xs text-[#f0d7b5]"
                 data-testid="whisper-notice"
               >
                 {whisperNotice}
@@ -1175,7 +1166,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
 
             <ul className="mt-4 space-y-3">
               {activeWhispers.length === 0 && (
-                <li className="rounded-[1rem] border border-dashed border-[#295c53] px-3 py-4 text-sm text-[#9fc6bc]">
+                <li className="rounded-[16px] border border-dashed border-[#5c6864] px-3 py-4 text-sm text-[#93a59f]">
                   No active whispers.
                 </li>
               )}
@@ -1186,20 +1177,20 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                 return (
                   <li
                     key={whisper.id}
-                    className="rounded-[1rem] border border-[#295c53] bg-[#122f2a] p-3"
+                    className="rounded-[18px] border border-[#374441] bg-[#0f1619] p-3"
                     data-testid={`whisper-card-${whisper.id}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-[#f2e3cd]">{getWhisperLabel(whisper)}</p>
-                        <p className="mt-1 text-xs text-[#9fc6bc]" data-testid={`whisper-members-${whisper.id}`}>
+                        <p className="truncate text-sm font-medium text-[#edf2ee]">{getWhisperLabel(whisper)}</p>
+                        <p className="mt-1 text-xs text-[#95a6a1]" data-testid={`whisper-members-${whisper.id}`}>
                           Members: {whisper.members.map(formatIdentityLabel).join(", ")}
                           <span className="sr-only"> Raw members: {whisper.members.join(", ")}</span>
                         </p>
                       </div>
                       <div className="flex flex-wrap justify-end gap-1">
                         <button
-                          className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                          className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                           onClick={() => setSelectedWhisperId(whisper.id)}
                           type="button"
                         >
@@ -1209,7 +1200,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                           <>
                             {selectedParticipants.length > 0 && (
                               <button
-                                className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                                className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                                 onClick={() => void addSelectedParticipantsToWhisper(whisper)}
                                 type="button"
                               >
@@ -1217,7 +1208,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                               </button>
                             )}
                             <button
-                              className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                              className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                               onClick={() => void leaveWhisper(whisper)}
                               type="button"
                             >
@@ -1226,7 +1217,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                           </>
                         ) : (
                           <button
-                            className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                            className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                             onClick={() => void joinWhisper(whisper)}
                             type="button"
                           >
@@ -1234,7 +1225,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                           </button>
                         )}
                         <button
-                          className="rounded-full border border-[#6f4d37] bg-[#2a1b15] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#f1d4b7]"
+                          className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
                           onClick={() => void closeWhisper(whisper)}
                           type="button"
                         >
@@ -1248,17 +1239,17 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
             </ul>
           </section>
 
-          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-            <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">At table</p>
+          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+            <h3 className="display-face text-[1.55rem] text-[#efdcbf]">At table</h3>
             <div className="mt-4 space-y-2">
               {participantRoster.map((participant) => (
-                <div key={participant.identity} className="flex items-center justify-between gap-3 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3">
+                <div key={participant.identity} className="flex items-center justify-between gap-3 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[#f2e3cd]">
+                    <p className="truncate text-sm font-medium text-[#edf2ee]">
                       {participant.label}
                       {participant.isLocal ? " (you)" : ""}
                     </p>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[#9fc6bc]">
+                    <p className="mt-1 text-xs text-[#95a6a1]">
                       {participant.whisperLabel
                         ? `Whisper / ${participant.whisperLabel}`
                         : participant.isSpotlight
@@ -1270,21 +1261,24 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                               : "Audio only"}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2 text-[11px] text-[#b8c4bd]">
                     {participant.isSpotlight && (
-                      <span className="rounded-full bg-[#7c5a39] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#ffe8ca]">
-                        Spotlight
-                      </span>
+                      <>
+                        <span className="h-2 w-2 rounded-full bg-[#d39b58]" />
+                        <span>Spotlight</span>
+                      </>
                     )}
                     {participant.whisperLabel && !participant.isSpotlight && (
-                      <span className="rounded-full bg-[#264c5c] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d2edf7]">
-                        Whisper
-                      </span>
+                      <>
+                        <span className="h-2 w-2 rounded-full bg-[#6ea798]" />
+                        <span>Whisper</span>
+                      </>
                     )}
                     {!participant.whisperLabel && !participant.isSpotlight && participant.isSpeaking && (
-                      <span className="rounded-full bg-[#183d37] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#cce6dd]">
-                        Speaking
-                      </span>
+                      <>
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        <span>Speaking</span>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1292,13 +1286,13 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
             </div>
           </section>
 
-          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
-            <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">Devices</p>
+          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+            <h3 className="display-face text-[1.55rem] text-[#efdcbf]">Devices</h3>
             <div className="mt-4 grid gap-3">
-              <label className="text-xs text-slate-200">
+              <label className="text-xs text-[#dde4df]">
                 Microphone
                 <select
-                  className="field mt-2 border-[#295c53] bg-[#122f2a]"
+                  className="field mt-2"
                   value={selectedAudioDevice}
                   onChange={(event) => void onSelectAudioDevice(event.target.value)}
                 >
@@ -1309,10 +1303,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                   ))}
                 </select>
               </label>
-              <label className="text-xs text-slate-200">
+              <label className="text-xs text-[#dde4df]">
                 Camera
                 <select
-                  className="field mt-2 border-[#295c53] bg-[#122f2a]"
+                  className="field mt-2"
                   value={selectedVideoDevice}
                   onChange={(event) => void onSelectVideoDevice(event.target.value)}
                 >
