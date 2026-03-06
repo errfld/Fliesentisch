@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
-import { createRoot, Root } from "react-dom/client";
+import { createRoot } from "react-dom/client";
+import type { Root } from "react-dom/client";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 
 // Required by React to suppress warnings when using act() in Vitest.

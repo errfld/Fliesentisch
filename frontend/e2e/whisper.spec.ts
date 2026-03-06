@@ -1,4 +1,5 @@
-import { Browser, BrowserContext, expect, Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 const TEST_ROOM = process.env.E2E_ROOM ?? "dnd-table-1";
 

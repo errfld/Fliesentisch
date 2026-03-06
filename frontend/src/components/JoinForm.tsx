@@ -1,21 +1,27 @@
-"use client";
+import { useState } from "react";
+import type { FormEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+const DEFAULT_ROOM = import.meta.env.VITE_DEFAULT_ROOM ?? "dnd-table-1";
+const DEFAULT_JOIN_KEY = import.meta.env.VITE_JOIN_KEY ?? "";
 
 export function JoinForm() {
-  const router = useRouter();
+  const navigate = useNavigate({ from: "/" });
   const [name, setName] = useState("");
-  const [room, setRoom] = useState(process.env.NEXT_PUBLIC_DEFAULT_ROOM ?? "dnd-table-1");
-  const [joinKey, setJoinKey] = useState(process.env.NEXT_PUBLIC_JOIN_KEY ?? "");
+  const [room, setRoom] = useState(DEFAULT_ROOM);
+  const [joinKey, setJoinKey] = useState(DEFAULT_JOIN_KEY);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const params = new URLSearchParams({ name: name.trim() || "Player" });
-    if (joinKey.trim()) {
-      params.set("joinKey", joinKey.trim());
-    }
-    router.push(`/room/${encodeURIComponent(room.trim() || "dnd-table-1")}?${params.toString()}`);
+
+    void navigate({
+      to: "/room/$room",
+      params: { room: room.trim() || DEFAULT_ROOM },
+      search: {
+        name: name.trim() || "Player",
+        joinKey: joinKey.trim() || undefined
+      }
+    });
   };
 
   return (

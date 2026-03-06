@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["vite.config.ts", "playwright.config.ts", "vitest.config.ts", "e2e/**/*.ts", "e2e/**/*.tsx"],
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  }
+}

@@ -29,13 +29,18 @@ services:
 
   frontend:
     build:
-      context: ../frontend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-ws://localhost:7880}
+        VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
+        VITE_JOIN_KEY: ${VITE_JOIN_KEY:-}
     restart: unless-stopped
     environment:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8787}
-      NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
-      NEXT_PUBLIC_DEFAULT_ROOM: ${NEXT_PUBLIC_DEFAULT_ROOM:-dnd-table-1}
+      VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-ws://localhost:7880}
+      VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
+      VITE_JOIN_KEY: ${VITE_JOIN_KEY:-}
     depends_on:
       - auth
       - livekit

@@ -1,9 +1,28 @@
-import { fixupConfigRules } from "@eslint/compat";
-import nextConfig from "eslint-config-next";
+import js from "@eslint/js";
+import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
 
-const config = [
-  { ignores: ["eslint.config.mjs", "next.config.mjs", "postcss.config.mjs"] },
-  ...fixupConfigRules(nextConfig),
-];
-
-export default config;
+export default tseslint.config(
+  {
+    ignores: ["dist", "node_modules", ".tanstack", ".vinxi", "src/routeTree.gen.ts"]
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx}"],
+    plugins: {
+      "react-hooks": reactHooks
+    },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn"
+    },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
+    }
+  }
+);

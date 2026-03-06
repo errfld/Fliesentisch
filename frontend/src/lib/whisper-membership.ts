@@ -1,4 +1,4 @@
-import { Whisper, WhisperClosePayload } from "@/lib/protocol";
+import type { Whisper, WhisperClosePayload } from "@/lib/protocol";
 
 export type WhisperMutation =
   | {

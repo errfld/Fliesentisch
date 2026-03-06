@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createEnvelope, Whisper } from "@/lib/protocol";
-import { calculateMainVolume, reduceWhisperState } from "@/store/whisperStore";
+import { createEnvelope } from "@/lib/protocol";
+import { calculateMainVolume, MAX_CLOSED_WHISPERS, reduceWhisperState } from "@/store/whisperStore";
+import type { Whisper } from "@/lib/protocol";
 import type { WhisperCoreState } from "@/store/whisperStore";
 
 const baseState: WhisperCoreState = {
   localIdentity: "alice",
   whispers: {},
+  closedWhisperUpdatedAts: {},
   selectedWhisperId: undefined,
   mainVolume: 1,
   spotlightIdentity: undefined,
@@ -203,6 +205,83 @@ describe("reduceWhisperState", () => {
 
     expect(staleClose.whispers.w1).toBeDefined();
     expect(freshClose.whispers.w1).toBeUndefined();
+  });
+
+  it("does not resurrect a whisper from stale snapshot data after close", () => {
+    const created = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 10))
+    );
+    const closed = reduceWhisperState(
+      created,
+      createEnvelope("WHISPER_CLOSE", "alice", {
+        id: "w1",
+        updatedAt: 11
+      })
+    );
+
+    expect(closed.whispers.w1).toBeUndefined();
+    expect(closed.closedWhisperUpdatedAts.w1).toBe(11);
+
+    const staleSnapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
+      whispers: [whisper("w1", 10)],
+      spotlightIdentity: null
+    });
+    const next = reduceWhisperState(closed, staleSnapshot);
+
+    expect(next.whispers.w1).toBeUndefined();
+    expect(next.closedWhisperUpdatedAts.w1).toBe(11);
+  });
+
+  it("accepts newer whisper updates after a close tombstone", () => {
+    const closed = reduceWhisperState(
+      baseState,
+      createEnvelope("WHISPER_CLOSE", "alice", {
+        id: "w1",
+        updatedAt: 11
+      })
+    );
+
+    expect(closed.whispers.w1).toBeUndefined();
+    expect(closed.closedWhisperUpdatedAts.w1).toBe(11);
+
+    const recreated = reduceWhisperState(
+      closed,
+      createEnvelope("WHISPER_CREATE", "alice", whisper("w1", 12))
+    );
+
+    expect(recreated.whispers.w1).toBeDefined();
+    expect(recreated.closedWhisperUpdatedAts.w1).toBeUndefined();
+  });
+
+  it("caps closed whisper tombstones to avoid unbounded growth", () => {
+    let nextState = baseState;
+    const totalInserted = MAX_CLOSED_WHISPERS + 5;
+
+    for (let index = 0; index < totalInserted; index += 1) {
+      nextState = reduceWhisperState(
+        nextState,
+        createEnvelope("WHISPER_CLOSE", "alice", {
+          id: `w${index}`,
+          updatedAt: index + 1
+        })
+      );
+    }
+
+    const tombstones = nextState.closedWhisperUpdatedAts;
+    const expectedRetainedIds = Array.from({ length: MAX_CLOSED_WHISPERS }, (_, offset) => `w${offset + 5}`);
+    const retainedIds = Object.keys(tombstones).sort(
+      (a, b) => Number(a.slice(1)) - Number(b.slice(1))
+    );
+
+    expect(retainedIds).toEqual(expectedRetainedIds);
+
+    for (let index = 0; index < 5; index += 1) {
+      expect(tombstones[`w${index}`]).toBeUndefined();
+    }
+    for (let index = 5; index < totalInserted; index += 1) {
+      expect(tombstones[`w${index}`]).toBe(index + 1);
+    }
   });
 
   it("clears selected whisper and restores main volume when selected whisper closes", () => {

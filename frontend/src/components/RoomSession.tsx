@@ -5,23 +5,17 @@ import {
   DisconnectReason,
   createLocalAudioTrack,
   createLocalVideoTrack,
-  LocalAudioTrack,
-  LocalTrackPublication,
-  LocalVideoTrack,
-  RemoteTrack,
   Room,
   RoomEvent,
   Track
 } from "livekit-client";
+import type { LocalAudioTrack, LocalTrackPublication, LocalVideoTrack, RemoteTrack } from "livekit-client";
 import { createUuid, getOrCreateClientId, toIdentity } from "@/lib/client-id";
 import {
-  AnyProtocolEnvelope,
   createEnvelope,
-  parseProtocolEnvelope,
-  SpotlightPayload,
-  Whisper,
-  WhisperClosePayload
+  parseProtocolEnvelope
 } from "@/lib/protocol";
+import type { AnyProtocolEnvelope, SpotlightPayload, Whisper, WhisperClosePayload } from "@/lib/protocol";
 import { collectReassignmentMutations } from "@/lib/whisper-membership";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 import { useWhisperStore } from "@/store/whisperStore";
@@ -47,7 +41,7 @@ type AudioTrackItem = {
   isMain: boolean;
 };
 
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL;
 const MEDIA_ACCESS_ERROR =
   "Microphone/camera access requires HTTPS (or localhost) and browser permission to use media devices.";
 

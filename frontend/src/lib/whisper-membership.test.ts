@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Whisper } from "@/lib/protocol";
 import { collectReassignmentMutations, enforceSingleWhisperMembership } from "@/lib/whisper-membership";
+import type { Whisper } from "@/lib/protocol";
 
 function whisper(id: string, members: string[], updatedAt: number): Whisper {
   return {

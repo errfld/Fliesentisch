@@ -8,6 +8,7 @@ dist
 .env
 .env.*
 !.env.example
+!.env.local.example
 
 # Rust
 backend/target
