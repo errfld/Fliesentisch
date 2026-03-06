@@ -25,13 +25,16 @@ export function JoinForm() {
   };
 
   return (
-    <section className="panel w-full max-w-xl">
-      <h1 className="text-3xl font-semibold tracking-tight text-accent">DnD Virtual Table</h1>
-      <p className="mt-2 text-sm text-slate-300">
-        Join the room, then use whisper groups and hold <strong>V</strong> for private side-talk.
-      </p>
-      <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-        <label className="block text-sm">
+    <section className="w-full rounded-[28px] border border-[#4a5b58] bg-[#161f22]/92 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
+      <div className="border-b border-[#34413f] pb-5">
+        <p className="text-sm text-[#c1cbc5]">Enter the room</p>
+        <h1 className="display-face mt-3 text-3xl leading-tight text-[#f0e3cd]">Join the table</h1>
+        <p className="mt-3 text-sm leading-6 text-[#b3bfba]">
+          Choose the name your group knows you by and step into the room. Whispers and spotlight stay inside.
+        </p>
+      </div>
+      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <label className="block text-sm text-[#dde4df]">
           Display name
           <input
             className="field"
@@ -41,7 +44,7 @@ export function JoinForm() {
             required
           />
         </label>
-        <label className="block text-sm">
+        <label className="block text-sm text-[#dde4df]">
           Room
           <input
             className="field"
@@ -51,17 +54,17 @@ export function JoinForm() {
             required
           />
         </label>
-        <label className="block text-sm">
-          Join key (optional)
+        <label className="block text-sm text-[#dde4df]">
+          Join key
           <input
             className="field"
             value={joinKey}
             onChange={(event) => setJoinKey(event.target.value)}
-            placeholder="shared secret"
+            placeholder="Optional"
           />
         </label>
-        <button className="btn btn-accent w-full" type="submit">
-          Enter Table
+        <button className="btn btn-accent mt-2 w-full justify-center" type="submit">
+          Enter table
         </button>
       </form>
     </section>
