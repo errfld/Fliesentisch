@@ -25,16 +25,14 @@ export function JoinForm() {
   };
 
   return (
-    <section className="w-full rounded-[28px] border border-[#4a5b58] bg-[#161f22]/92 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.38)]">
-      <div className="border-b border-[#34413f] pb-5">
-        <p className="text-sm text-[#c1cbc5]">Enter the room</p>
-        <h1 className="display-face mt-3 text-3xl leading-tight text-[#f0e3cd]">Join the table</h1>
-        <p className="mt-3 text-sm leading-6 text-[#b3bfba]">
-          Choose the name your group knows you by and step into the room. Whispers and spotlight stay inside.
-        </p>
-      </div>
-      <form className="mt-5 space-y-4" onSubmit={onSubmit}>
-        <label className="block text-sm text-[#dde4df]">
+    <section className="w-full max-w-sm">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--c-text-faint)]">Enter the room</p>
+      <h1 className="display-face mt-2 text-2xl text-[var(--c-text-warm)]">Join the table</h1>
+      <p className="mt-3 text-sm leading-relaxed text-[var(--c-text-dim)]">
+        Choose the name your group knows you by and step into the room. Whispers and spotlight stay inside.
+      </p>
+      <form className="mt-8 space-y-6" onSubmit={onSubmit}>
+        <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
           Display name
           <input
             className="field"
@@ -44,7 +42,7 @@ export function JoinForm() {
             required
           />
         </label>
-        <label className="block text-sm text-[#dde4df]">
+        <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
           Room
           <input
             className="field"
@@ -54,7 +52,7 @@ export function JoinForm() {
             required
           />
         </label>
-        <label className="block text-sm text-[#dde4df]">
+        <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
           Join key
           <input
             className="field"
@@ -63,7 +61,7 @@ export function JoinForm() {
             placeholder="Optional"
           />
         </label>
-        <button className="btn btn-accent mt-2 w-full justify-center" type="submit">
+        <button className="chip mt-4 w-full justify-center py-2.5 text-xs" type="submit">
           Enter table
         </button>
       </form>
