@@ -230,6 +230,7 @@ describe("reduceWhisperState", () => {
     const next = reduceWhisperState(closed, staleSnapshot);
 
     expect(next.whispers.w1).toBeUndefined();
+    expect(next.closedWhisperUpdatedAts.w1).toBe(11);
   });
 
   it("accepts newer whisper updates after a close tombstone", () => {
@@ -255,8 +256,9 @@ describe("reduceWhisperState", () => {
 
   it("caps closed whisper tombstones to avoid unbounded growth", () => {
     let nextState = baseState;
+    const totalInserted = MAX_CLOSED_WHISPERS + 5;
 
-    for (let index = 0; index < MAX_CLOSED_WHISPERS + 5; index += 1) {
+    for (let index = 0; index < totalInserted; index += 1) {
       nextState = reduceWhisperState(
         nextState,
         createEnvelope("WHISPER_CLOSE", "alice", {
@@ -266,9 +268,20 @@ describe("reduceWhisperState", () => {
       );
     }
 
-    expect(Object.keys(nextState.closedWhisperUpdatedAts)).toHaveLength(MAX_CLOSED_WHISPERS);
-    expect(nextState.closedWhisperUpdatedAts.w0).toBeUndefined();
-    expect(nextState.closedWhisperUpdatedAts[`w${MAX_CLOSED_WHISPERS + 4}`]).toBe(MAX_CLOSED_WHISPERS + 5);
+    const tombstones = nextState.closedWhisperUpdatedAts;
+    const expectedRetainedIds = Array.from({ length: MAX_CLOSED_WHISPERS }, (_, offset) => `w${offset + 5}`);
+    const retainedIds = Object.keys(tombstones).sort(
+      (a, b) => Number(a.slice(1)) - Number(b.slice(1))
+    );
+
+    expect(retainedIds).toEqual(expectedRetainedIds);
+
+    for (let index = 0; index < 5; index += 1) {
+      expect(tombstones[`w${index}`]).toBeUndefined();
+    }
+    for (let index = 5; index < totalInserted; index += 1) {
+      expect(tombstones[`w${index}`]).toBe(index + 1);
+    }
   });
 
   it("clears selected whisper and restores main volume when selected whisper closes", () => {
