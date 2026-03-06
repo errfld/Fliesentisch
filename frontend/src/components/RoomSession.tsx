@@ -895,6 +895,41 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     return tracks;
   })();
 
+  const activeWhispers = Object.values(whispers).sort((a, b) => b.updatedAt - a.updatedAt);
+  const spotlightTile = spotlightIdentity ? videoTiles.find((tile) => tile.identity === spotlightIdentity) : undefined;
+  const selfTile = videoTiles.find((tile) => tile.isLocal);
+  const stageTile = spotlightTile ?? videoTiles.find((tile) => !tile.isLocal) ?? selfTile;
+  const selfPreviewTile = selfTile && selfTile.key !== stageTile?.key ? selfTile : undefined;
+  const railTiles = videoTiles.filter((tile) => tile.key !== stageTile?.key && tile.key !== selfPreviewTile?.key);
+  const participantRoster = Array.from(new Set([identity, ...Array.from(room?.remoteParticipants.keys() ?? [])]))
+    .map((participantIdentity) => {
+      const whisper = activeWhispers.find((entry) => entry.members.includes(participantIdentity));
+      return {
+        identity: participantIdentity,
+        label: formatIdentityLabel(participantIdentity),
+        isLocal: participantIdentity === identity,
+        isSpotlight: participantIdentity === spotlightIdentity,
+        isSpeaking: activeSpeakers.has(participantIdentity),
+        hasVideo: videoTiles.some((tile) => tile.identity === participantIdentity),
+        whisperLabel: whisper ? getWhisperLabel(whisper) : undefined
+      };
+    })
+    .sort((a, b) => {
+      if (a.isSpotlight && !b.isSpotlight) {
+        return -1;
+      }
+      if (b.isSpotlight && !a.isSpotlight) {
+        return 1;
+      }
+      if (a.isLocal && !b.isLocal) {
+        return -1;
+      }
+      if (b.isLocal && !a.isLocal) {
+        return 1;
+      }
+      return a.label.localeCompare(b.label);
+    });
+
   if (isConnecting) {
     return <div className="panel">Connecting to room...</div>;
   }
@@ -908,230 +943,390 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-      <section className="panel space-y-4">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-semibold">Room: {roomName}</h2>
-            <p className="text-xs text-slate-300">
-              You are <span className="font-mono">{identity}</span>
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="btn" onClick={toggleMic} type="button">
-              {micEnabled ? "Mute" : "Unmute"}
-            </button>
-            <button className="btn" onClick={toggleCamera} type="button">
-              {cameraEnabled ? "Camera Off" : "Camera On"}
-            </button>
-            <button className="btn" onClick={() => room.disconnect()} type="button">
-              Leave
-            </button>
-          </div>
-        </header>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {videoTiles.length === 0 && (
-            <div className="rounded-lg border border-dashed border-slate-600 p-6 text-sm text-slate-300">
-              No video tracks yet. Enable camera to appear in the table grid.
+    <>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.75fr)_18rem]">
+        <section className="rounded-[2rem] border border-[#28574f] bg-[linear-gradient(180deg,_rgba(13,37,33,0.94),_rgba(8,20,18,0.98))] p-4 shadow-[0_36px_120px_rgba(0,0,0,0.42)] md:p-5">
+          <header className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="sr-only">Room: {roomName}</h2>
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[#9fc6bc]">Connected</p>
+              <p className="mt-2 text-sm text-[#d8e7e3]">{displayName}</p>
+              <p className="sr-only">
+                You are <span className="font-mono">{identity}</span>
+              </p>
             </div>
-          )}
-          {videoTiles.map((tile, index) => {
-            const isSpotlight = spotlightIdentity && tile.identity === spotlightIdentity;
-            const isActiveSpeaker = activeSpeakers.has(tile.identity);
-            const isInviteSelected = !tile.isLocal && selectedParticipantIds.has(tile.identity);
-            return (
+            <div className="flex flex-wrap gap-2">
+              <button className="btn border-[#2d6057] bg-[#112823] hover:bg-[#17342e]" onClick={toggleMic} type="button">
+                {micEnabled ? "Mute" : "Unmute"}
+              </button>
+              <button className="btn border-[#2d6057] bg-[#112823] hover:bg-[#17342e]" onClick={toggleCamera} type="button">
+                {cameraEnabled ? "Camera Off" : "Camera On"}
+              </button>
+              <button className="btn border-[#6f4d37] bg-[#2a1b15] hover:bg-[#38231c]" onClick={() => room.disconnect()} type="button">
+                Leave
+              </button>
+            </div>
+          </header>
+
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            <div className="rounded-full border border-[#2f655b] bg-[#112b25]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#c8ddd7]">
+              {participantRoster.length} online
+            </div>
+            <div className="rounded-full border border-[#356d85] bg-[#152a33]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#cfe2f0]">
+              {activeWhispers.length} whisper{activeWhispers.length === 1 ? "" : "s"}
+            </div>
+            <div className="rounded-full border border-[#755337] bg-[#2a1b15]/80 px-3 py-1.5 uppercase tracking-[0.18em] text-[#edd4b5]">
+              {spotlightIdentity ? `Spotlight ${formatIdentityLabel(spotlightIdentity)}` : "Spotlight auto"}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-[1.8rem] border border-[#2a5d55] bg-[linear-gradient(180deg,_rgba(16,44,39,0.88),_rgba(10,24,22,0.96))] p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#bdd6cd]">Spotlight</p>
+                <h3 className="mt-2 text-3xl text-[#f4e2c3]">
+                  {stageTile ? formatIdentityLabel(stageTile.identity) : "Shared stage"}
+                </h3>
+              </div>
+              <label className="hidden items-center gap-2 rounded-full border border-[#2f655b] bg-[#102a25] px-3 py-2 text-xs text-[#cde1db] lg:flex">
+                <input
+                  type="checkbox"
+                  checked={followSpotlight}
+                  onChange={(event) => setFollowSpotlight(event.target.checked)}
+                />
+                Follow spotlight
+              </label>
+            </div>
+
+            {stageTile ? (
               <article
-                data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
-                className={`relative rounded-lg border bg-slate-900/80 p-2 ${
-                  isSpotlight ? "border-amber-300" : "border-slate-700"
-                } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""} ${
-                  isInviteSelected ? "ring-2 ring-sky-400/70" : ""
-                } ${
-                  index === 0 && isSpotlight && followSpotlight ? "md:col-span-2 xl:col-span-3" : ""
-                }`}
-                key={tile.key}
+                key={stageTile.key}
+                data-testid={`video-tile-${stageTile.identity}-${stageTile.trackSid}`}
+                className={`relative mt-4 overflow-hidden rounded-[1.6rem] border bg-black ${
+                  stageTile.identity === spotlightIdentity ? "border-amber-300" : "border-[#2a5d55]"
+                } ${activeSpeakers.has(stageTile.identity) ? "ring-2 ring-emerald-400/70" : ""}`}
               >
                 <TrackElement
-                  track={tile.track}
+                  track={stageTile.track}
                   kind="video"
-                  muted={tile.isLocal}
-                  className="aspect-video w-full rounded-md bg-black object-cover"
+                  muted={stageTile.isLocal}
+                  className="aspect-[21/9] w-full bg-black object-cover"
                 />
-                <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate">
-                    {tile.identity}
-                    {tile.isLocal ? " (you)" : ""}
-                  </span>
-                  <div className="flex gap-1">
-                    {!tile.isLocal && (
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,_transparent,_rgba(5,10,10,0.82))]" />
+                <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-4">
+                  <div>
+                    <div className="inline-flex items-center rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-white/80 backdrop-blur-sm">
+                      {stageTile.identity === spotlightIdentity ? "Spotlight" : "Live"}
+                    </div>
+                    <p className="mt-3 text-2xl text-[#fff0da]">
+                      {formatIdentityLabel(stageTile.identity)}
+                      {stageTile.isLocal ? " (you)" : ""}
+                    </p>
+                    <p className="mt-1 text-sm text-white/70">{activeSpeakers.has(stageTile.identity) ? "Speaking now" : "At table"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!stageTile.isLocal && (
                       <button
-                        className="btn px-2 py-1 text-[11px]"
-                        onClick={() => toggleParticipantSelection(tile.identity)}
+                        className={`rounded-full border px-3 py-2 text-xs uppercase tracking-[0.2em] backdrop-blur-sm ${
+                          selectedParticipantIds.has(stageTile.identity)
+                            ? "border-sky-300 bg-sky-500/20 text-sky-100"
+                            : "border-white/20 bg-black/35 text-white/80 hover:border-sky-300/60"
+                        }`}
+                        onClick={() => toggleParticipantSelection(stageTile.identity)}
                         type="button"
-                        data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
+                        data-testid={`video-select-${stageTile.identity}-${stageTile.trackSid}`}
                       >
-                        {isInviteSelected ? "Selected" : "Select"}
+                        {selectedParticipantIds.has(stageTile.identity) ? "Selected" : "Select"}
                       </button>
                     )}
                     <button
-                      className="btn px-2 py-1 text-[11px]"
-                      onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
+                      className="rounded-full border border-white/20 bg-black/35 px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/80 backdrop-blur-sm hover:border-amber-300/70"
+                      onClick={() => void setSpotlight(spotlightIdentity === stageTile.identity ? null : stageTile.identity)}
                       type="button"
                     >
-                      {isSpotlight ? "Unspotlight" : "Spotlight"}
+                      {stageTile.identity === spotlightIdentity ? "Unspotlight" : "Spotlight"}
                     </button>
                   </div>
                 </div>
-              </article>
-            );
-          })}
-        </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="text-xs text-slate-200">
-            Microphone
-            <select
-              className="field"
-              value={selectedAudioDevice}
-              onChange={(event) => void onSelectAudioDevice(event.target.value)}
-            >
-              {audioDevices.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs text-slate-200">
-            Camera
-            <select
-              className="field"
-              value={selectedVideoDevice}
-              onChange={(event) => void onSelectVideoDevice(event.target.value)}
-            >
-              {videoDevices.map((device) => (
-                <option key={device.deviceId} value={device.deviceId}>
-                  {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <aside className="panel space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold">Whispers</h3>
-          <button className="btn btn-accent" onClick={() => void createWhisper()} type="button">
-            New Whisper
-          </button>
-        </div>
-
-        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300" data-testid="whisper-selected-invitees">
-          Selected invitees: {selectedParticipants.length > 0 ? selectedParticipants.join(", ") : "none"}
-        </div>
-
-        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300" data-testid="whisper-ptt-panel">
-          Hold <strong>V</strong> to talk in selected whisper. Press <strong>G</strong> to leave your current whisper.
-          Main audio ducking: {(mainVolume * 100).toFixed(0)}%.
-          <br />
-          <span data-testid="whisper-ptt-status">PTT: {isPttActive ? "active" : "idle"}</span>
-        </div>
-
-        {whisperNotice && (
-          <div
-            className="rounded-md border border-amber-400/70 bg-amber-950/40 p-3 text-xs text-amber-200"
-            data-testid="whisper-notice"
-          >
-            {whisperNotice}
-          </div>
-        )}
-
-        <ul className="space-y-2">
-          {Object.values(whispers).length === 0 && (
-            <li className="rounded-md border border-dashed border-slate-600 p-3 text-sm text-slate-400">
-              No active whispers.
-            </li>
-          )}
-          {Object.values(whispers).map((whisper) => {
-            const isMember = whisper.members.includes(identity);
-            const isSelected = selectedWhisperId === whisper.id;
-            return (
-              <li
-                key={whisper.id}
-                className="rounded-md border border-slate-700 bg-slate-900/50 p-3"
-                data-testid={`whisper-card-${whisper.id}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">{whisper.title || `Whisper ${whisper.id.slice(0, 6)}`}</p>
-                    <p className="mt-1 text-xs text-slate-300" data-testid={`whisper-members-${whisper.id}`}>
-                      Members: {whisper.members.join(", ")}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      className="btn px-2 py-1 text-[11px]"
-                      onClick={() => setSelectedWhisperId(whisper.id)}
-                      type="button"
+                {selfPreviewTile && (
+                  <div className="absolute bottom-4 right-4 z-10 w-[7.5rem] sm:w-[9rem]">
+                    <article
+                      data-testid={`video-tile-${selfPreviewTile.identity}-${selfPreviewTile.trackSid}`}
+                      className="overflow-hidden rounded-[1rem] border border-[#2a5d55] bg-black shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
                     >
-                      {isSelected ? "Selected" : "Select"}
-                    </button>
-                    {isMember ? (
-                      <>
-                        {selectedParticipants.length > 0 && (
+                      <TrackElement
+                        track={selfPreviewTile.track}
+                        kind="video"
+                        muted
+                        className="aspect-[4/5] w-full bg-black object-cover"
+                      />
+                      <div className="bg-black/70 px-3 py-2 text-xs text-white/75">You</div>
+                    </article>
+                  </div>
+                )}
+              </article>
+            ) : (
+              <div className="mt-4 rounded-[1.6rem] border border-dashed border-[#2a5d55] bg-[#091614] p-10 text-center text-sm text-[#b8d3cb]">
+                No video tracks yet. Enable a camera and spotlight will take over this stage.
+              </div>
+            )}
+
+            {railTiles.length > 0 && (
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {railTiles.map((tile) => {
+                  const isSpotlight = tile.identity === spotlightIdentity;
+                  const isSelectedForInvite = !tile.isLocal && selectedParticipantIds.has(tile.identity);
+                  const isActiveSpeaker = activeSpeakers.has(tile.identity);
+
+                  return (
+                    <article
+                      key={tile.key}
+                      data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
+                      className={`overflow-hidden rounded-[1.15rem] border bg-black ${
+                        isSpotlight ? "border-amber-300" : "border-[#295c53]"
+                      } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""}`}
+                    >
+                      <TrackElement
+                        track={tile.track}
+                        kind="video"
+                        muted={tile.isLocal}
+                        className="aspect-[16/10] w-full bg-black object-cover"
+                      />
+                      <div className="border-t border-white/5 bg-[linear-gradient(180deg,_rgba(11,25,23,0.96),_rgba(8,18,17,0.98))] p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-[#f2e3cd]">
+                              {formatIdentityLabel(tile.identity)}
+                              {tile.isLocal ? " (you)" : ""}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#9fc6bc]">
+                              {isActiveSpeaker ? "Speaking" : "Live"}
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            {!tile.isLocal && (
+                              <button
+                                className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] ${
+                                  isSelectedForInvite
+                                    ? "border-sky-300 bg-sky-500/20 text-sky-100"
+                                    : "border-[#36675e] bg-[#112823] text-[#d0e5de]"
+                                }`}
+                                onClick={() => toggleParticipantSelection(tile.identity)}
+                                type="button"
+                                data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
+                              >
+                                {isSelectedForInvite ? "Selected" : "Select"}
+                              </button>
+                            )}
+                            <button
+                              className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                              onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
+                              type="button"
+                            >
+                              {isSpotlight ? "Live" : "Spot"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside className="grid gap-4">
+          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">Whispers</p>
+              <button className="btn btn-accent px-3 py-2" onClick={() => void createWhisper()} type="button">
+                New Whisper
+              </button>
+            </div>
+
+            <div
+              className="mt-4 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3 text-xs text-[#d3e8df]"
+              data-testid="whisper-selected-invitees"
+            >
+              Selected invitees: {selectedParticipants.length > 0 ? selectedParticipants.map(formatIdentityLabel).join(", ") : "none"}
+            </div>
+
+            <div
+              className="mt-3 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3 text-xs text-[#d3e8df]"
+              data-testid="whisper-ptt-panel"
+            >
+              {selectedWhisper ? `Selected whisper: ${getWhisperLabel(selectedWhisper)}` : "No whisper selected"}
+              <br />
+              Hold <strong>V</strong> to talk. Press <strong>G</strong> to leave.
+              <br />
+              <span data-testid="whisper-ptt-status">PTT: {isPttActive ? "active" : "idle"}</span>
+            </div>
+
+            {whisperNotice && (
+              <div
+                className="mt-3 rounded-[1rem] border border-amber-400/70 bg-amber-950/30 px-3 py-3 text-xs text-amber-200"
+                data-testid="whisper-notice"
+              >
+                {whisperNotice}
+              </div>
+            )}
+
+            <ul className="mt-4 space-y-3">
+              {activeWhispers.length === 0 && (
+                <li className="rounded-[1rem] border border-dashed border-[#295c53] px-3 py-4 text-sm text-[#9fc6bc]">
+                  No active whispers.
+                </li>
+              )}
+              {activeWhispers.map((whisper) => {
+                const isMember = whisper.members.includes(identity);
+                const isSelected = selectedWhisperId === whisper.id;
+
+                return (
+                  <li
+                    key={whisper.id}
+                    className="rounded-[1rem] border border-[#295c53] bg-[#122f2a] p-3"
+                    data-testid={`whisper-card-${whisper.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#f2e3cd]">{getWhisperLabel(whisper)}</p>
+                        <p className="mt-1 text-xs text-[#9fc6bc]" data-testid={`whisper-members-${whisper.id}`}>
+                          Members: {whisper.members.map(formatIdentityLabel).join(", ")}
+                          <span className="sr-only"> Raw members: {whisper.members.join(", ")}</span>
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <button
+                          className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                          onClick={() => setSelectedWhisperId(whisper.id)}
+                          type="button"
+                        >
+                          {isSelected ? "Selected" : "Select"}
+                        </button>
+                        {isMember ? (
+                          <>
+                            {selectedParticipants.length > 0 && (
+                              <button
+                                className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                                onClick={() => void addSelectedParticipantsToWhisper(whisper)}
+                                type="button"
+                              >
+                                Add
+                              </button>
+                            )}
+                            <button
+                              className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                              onClick={() => void leaveWhisper(whisper)}
+                              type="button"
+                            >
+                              Leave
+                            </button>
+                          </>
+                        ) : (
                           <button
-                            className="btn px-2 py-1 text-[11px]"
-                            onClick={() => void addSelectedParticipantsToWhisper(whisper)}
+                            className="rounded-full border border-[#36675e] bg-[#112823] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d0e5de]"
+                            onClick={() => void joinWhisper(whisper)}
                             type="button"
                           >
-                            Add Selected
+                            Join
                           </button>
                         )}
                         <button
-                          className="btn px-2 py-1 text-[11px]"
-                          onClick={() => void leaveWhisper(whisper)}
+                          className="rounded-full border border-[#6f4d37] bg-[#2a1b15] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#f1d4b7]"
+                          onClick={() => void closeWhisper(whisper)}
                           type="button"
                         >
-                          Leave
+                          Close
                         </button>
-                      </>
-                    ) : (
-                      <button
-                        className="btn px-2 py-1 text-[11px]"
-                        onClick={() => void joinWhisper(whisper)}
-                        type="button"
-                      >
-                        Join
-                      </button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+            <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">At table</p>
+            <div className="mt-4 space-y-2">
+              {participantRoster.map((participant) => (
+                <div key={participant.identity} className="flex items-center justify-between gap-3 rounded-[1rem] border border-[#295c53] bg-[#122f2a] px-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-[#f2e3cd]">
+                      {participant.label}
+                      {participant.isLocal ? " (you)" : ""}
+                    </p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[#9fc6bc]">
+                      {participant.whisperLabel
+                        ? `Whisper / ${participant.whisperLabel}`
+                        : participant.isSpotlight
+                          ? "Spotlight"
+                          : participant.isSpeaking
+                            ? "Speaking"
+                            : participant.hasVideo
+                              ? "Video live"
+                              : "Audio only"}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {participant.isSpotlight && (
+                      <span className="rounded-full bg-[#7c5a39] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#ffe8ca]">
+                        Spotlight
+                      </span>
                     )}
-                    <button
-                      className="btn px-2 py-1 text-[11px]"
-                      onClick={() => void closeWhisper(whisper)}
-                      type="button"
-                    >
-                      Close
-                    </button>
+                    {participant.whisperLabel && !participant.isSpotlight && (
+                      <span className="rounded-full bg-[#264c5c] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#d2edf7]">
+                        Whisper
+                      </span>
+                    )}
+                    {!participant.whisperLabel && !participant.isSpotlight && participant.isSpeaking && (
+                      <span className="rounded-full bg-[#183d37] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-[#cce6dd]">
+                        Speaking
+                      </span>
+                    )}
                   </div>
                 </div>
-              </li>
-            );
-          })}
-        </ul>
+              ))}
+            </div>
+          </section>
 
-        <div className="rounded-md border border-slate-700 bg-slate-900/60 p-3 text-xs">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={followSpotlight}
-              onChange={(event) => setFollowSpotlight(event.target.checked)}
-            />
-            Follow spotlight for layout priority
-          </label>
-          <p className="mt-2 text-slate-300">Current spotlight: {spotlightIdentity ?? "none"}</p>
-        </div>
-      </aside>
+          <section className="rounded-[1.6rem] border border-[#25544d] bg-[#0d211e]/86 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+            <p className="text-xs uppercase tracking-[0.3em] text-[#b7d2ca]">Devices</p>
+            <div className="mt-4 grid gap-3">
+              <label className="text-xs text-slate-200">
+                Microphone
+                <select
+                  className="field mt-2 border-[#295c53] bg-[#122f2a]"
+                  value={selectedAudioDevice}
+                  onChange={(event) => void onSelectAudioDevice(event.target.value)}
+                >
+                  {audioDevices.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-200">
+                Camera
+                <select
+                  className="field mt-2 border-[#295c53] bg-[#122f2a]"
+                  value={selectedVideoDevice}
+                  onChange={(event) => void onSelectVideoDevice(event.target.value)}
+                >
+                  {videoDevices.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+        </aside>
+      </div>
 
       {audioTracks.map((item) => (
         <TrackElement
@@ -1142,6 +1337,19 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           muted={false}
         />
       ))}
-    </div>
+    </>
   );
+}
+
+function formatIdentityLabel(identity: string): string {
+  return identity
+    .replace(/-[a-z0-9]{12}$/i, "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getWhisperLabel(whisper: Whisper): string {
+  return whisper.title || `Whisper ${whisper.id.slice(0, 6)}`;
 }
