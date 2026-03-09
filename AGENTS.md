@@ -4,6 +4,7 @@
 - Save created plans **ALWAYS** in `docs/plans` folder. Save them with the pattern: 'yyyy-mm-dd_short-description'
 
 ### Frontend Architecture
+
 - Put large screen-specific features under `frontend/src/features/<feature-name>/`.
 - Keep `frontend/src/components/` for shared, reusable UI primitives rather than full-screen controllers.
 - Keep route/session entry components thin: compose feature hooks and feature components instead of combining protocol, media, store, and UI logic in one file.

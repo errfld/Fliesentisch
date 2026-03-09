@@ -15,6 +15,14 @@ type UseRoomConnectionInput = {
   joinKey?: string;
 };
 
+const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
+  [DisconnectReason.PARTICIPANT_REMOVED]: "You were removed from the room.",
+  [DisconnectReason.ROOM_DELETED]: "The room was deleted.",
+  [DisconnectReason.SERVER_SHUTDOWN]: "Server is shutting down.",
+  [DisconnectReason.STATE_MISMATCH]: "Connection state went out of sync.",
+  [DisconnectReason.JOIN_FAILURE]: "Failed to join the room."
+};
+
 export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomConnectionInput) {
   const [clientId, setClientId] = useState("");
   const [token, setToken] = useState("");
@@ -137,7 +145,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
         if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
           setError("Disconnected: duplicate identity. Refresh to generate a new client ID.");
         } else {
-          setError(`Disconnected (${String(reason)}).`);
+          setError(DISCONNECT_MESSAGES[reason] ?? `Disconnected (${String(reason)}).`);
         }
       }
 

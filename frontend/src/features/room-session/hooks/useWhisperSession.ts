@@ -62,15 +62,22 @@ export function useWhisperSession({
 
   const publishEnvelope = useCallback(
     async (envelope: AnyProtocolEnvelope, applyLocally = true) => {
-      if (applyLocally) {
-        applyEnvelope(envelope);
-      }
       if (!room) {
-        return;
+        return false;
       }
 
-      const payload = new TextEncoder().encode(JSON.stringify(envelope));
-      await room.localParticipant.publishData(payload, { reliable: true });
+      try {
+        const payload = new TextEncoder().encode(JSON.stringify(envelope));
+        await room.localParticipant.publishData(payload, { reliable: true });
+
+        if (applyLocally) {
+          applyEnvelope(envelope);
+        }
+
+        return true;
+      } catch {
+        return false;
+      }
     },
     [applyEnvelope, room]
   );
@@ -156,7 +163,7 @@ export function useWhisperSession({
 
   useEffect(() => {
     applySelectiveSubscriptions();
-  }, [applySelectiveSubscriptions]);
+  }, [applySelectiveSubscriptions, renderVersion]);
 
   useEffect(() => {
     if (room && selectedWhisperId) {
@@ -235,7 +242,12 @@ export function useWhisperSession({
       updatedAt: now
     };
 
-    await publishEnvelope(createEnvelope("WHISPER_CREATE", identity, whisper));
+    const didPublish = await publishEnvelope(createEnvelope("WHISPER_CREATE", identity, whisper));
+    if (!didPublish) {
+      setWhisperNotice("Failed to create whisper while disconnected.");
+      return;
+    }
+
     setSelectedWhisperId(id);
     setSelectedParticipantIds(new Set());
     setWhisperNotice(null);
@@ -256,7 +268,12 @@ export function useWhisperSession({
         updatedAt: now
       };
 
-      await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      if (!didPublish) {
+        setWhisperNotice("Failed to join whisper while disconnected.");
+        return;
+      }
+
       setSelectedWhisperId(whisper.id);
       setWhisperNotice(null);
     },
@@ -284,7 +301,12 @@ export function useWhisperSession({
         updatedAt: now
       };
 
-      await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      if (!didPublish) {
+        setWhisperNotice("Failed to update whisper while disconnected.");
+        return;
+      }
+
       setSelectedParticipantIds(new Set());
       setWhisperNotice(null);
     },
@@ -303,14 +325,22 @@ export function useWhisperSession({
           id: whisper.id,
           updatedAt: Date.now()
         };
-        await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+        const didPublish = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+        if (!didPublish) {
+          setWhisperNotice("Failed to leave whisper while disconnected.");
+          return;
+        }
       } else {
         const updated: Whisper = {
           ...whisper,
           members: remaining,
           updatedAt: Date.now()
         };
-        await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+        const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+        if (!didPublish) {
+          setWhisperNotice("Failed to leave whisper while disconnected.");
+          return;
+        }
       }
 
       if (selectedWhisperId === whisper.id) {
@@ -347,7 +377,12 @@ export function useWhisperSession({
         id: whisper.id,
         updatedAt: Date.now()
       };
-      await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+      const didPublish = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+      if (!didPublish) {
+        setWhisperNotice("Failed to close whisper while disconnected.");
+        return;
+      }
+
       if (selectedWhisperId === whisper.id) {
         setSelectedWhisperId(undefined);
       }

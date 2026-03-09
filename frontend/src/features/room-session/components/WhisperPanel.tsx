@@ -99,7 +99,7 @@ export function WhisperPanel({
               <div className="mt-1.5 flex items-center gap-3">
                 <button
                   className={`act ${isSelected ? "act--gold" : ""}`}
-                  onClick={() => onSelectWhisper(whisper.id)}
+                  onClick={() => onSelectWhisper(isSelected ? undefined : whisper.id)}
                   type="button"
                 >
                   {isSelected ? "Active" : "Select"}

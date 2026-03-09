@@ -22,22 +22,30 @@ export function ParticipantRoster({ participantRoster }: ParticipantRosterProps)
                 {participant.isLocal ? <span className="ml-1 text-[var(--c-text-faint)]">(you)</span> : ""}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2 text-[10px]">
-              {participant.isSpotlight && <span className="text-[var(--c-gold)]">Spotlight</span>}
-              {participant.whisperLabel && !participant.isSpotlight && <span className="text-teal-400">Whisper</span>}
-              {!participant.whisperLabel && !participant.isSpotlight && participant.isSpeaking && (
-                <span className="text-[var(--c-emerald)]">Speaking</span>
-              )}
-              {!participant.whisperLabel && !participant.isSpotlight && !participant.isSpeaking && participant.hasVideo && (
-                <span className="text-[var(--c-text-faint)]">Video</span>
-              )}
-              {!participant.whisperLabel && !participant.isSpotlight && !participant.isSpeaking && !participant.hasVideo && (
-                <span className="text-[var(--c-text-faint)]">Audio</span>
-              )}
-            </div>
+            <div className="flex shrink-0 items-center gap-2 text-[10px]">{getStatusIndicator(participant)}</div>
           </div>
         ))}
       </div>
     </div>
   );
+}
+
+function getStatusIndicator(participant: ParticipantRosterItem) {
+  if (participant.isSpotlight) {
+    return <span className="text-[var(--c-gold)]">Spotlight</span>;
+  }
+
+  if (participant.whisperLabel) {
+    return <span className="text-teal-400">Whisper</span>;
+  }
+
+  if (participant.isSpeaking) {
+    return <span className="text-[var(--c-emerald)]">Speaking</span>;
+  }
+
+  if (participant.hasVideo) {
+    return <span className="text-[var(--c-text-faint)]">Video</span>;
+  }
+
+  return <span className="text-[var(--c-text-faint)]">Audio</span>;
 }

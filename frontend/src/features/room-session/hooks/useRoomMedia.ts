@@ -120,6 +120,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         publication = await room.localParticipant.publishTrack(mainTrack, { name: "main" });
 
         if (cancelled) {
+          await room.localParticipant.unpublishTrack(mainTrack).catch(() => {});
           mainTrack.stop();
           return;
         }
@@ -175,10 +176,10 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
       await clearWhisperTrack();
 
       const whisperTrack = await createLocalAudioTrack();
+      await whisperTrack.mute();
       const whisperPublication = await room.localParticipant.publishTrack(whisperTrack, {
         name: `whisper:${whisperId}`
       });
-      await whisperTrack.mute();
 
       whisperTrackRef.current = whisperTrack;
       whisperPubRef.current = whisperPublication;
@@ -196,8 +197,6 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         return;
       }
 
-      await whisperTrack.unmute();
-
       const mainTrack = mainTrackRef.current;
       if (mainTrack) {
         mainMutedBeforePttRef.current = mainTrack.isMuted;
@@ -207,6 +206,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         setMicEnabled(false);
       }
 
+      await whisperTrack.unmute();
       setIsPttActive(true);
     },
     [ensureWhisperTrack]
@@ -281,7 +281,14 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         return;
       }
 
-      await room.switchActiveDevice("audioinput", deviceId);
+      const didSwitch = await room.switchActiveDevice("audioinput", deviceId);
+      if (!didSwitch) {
+        const switchError = new Error("Failed to switch microphone");
+        setError(switchError.message);
+        throw switchError;
+      }
+
+      setError(null);
       setSelectedAudioDevice(deviceId);
     },
     [room]
@@ -293,7 +300,14 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         return;
       }
 
-      await room.switchActiveDevice("videoinput", deviceId);
+      const didSwitch = await room.switchActiveDevice("videoinput", deviceId);
+      if (!didSwitch) {
+        const switchError = new Error("Failed to switch camera");
+        setError(switchError.message);
+        throw switchError;
+      }
+
+      setError(null);
       setSelectedVideoDevice(deviceId);
     },
     [room]
