@@ -22,7 +22,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-router": "^1.166.3",
     "@tanstack/react-start": "^1.166.1",
-    "@tanstack/router-plugin": "^1.164.0",
+    "@tanstack/router-plugin": "^1.166.3",
     "livekit-client": "^2.17.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
