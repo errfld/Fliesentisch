@@ -66,6 +66,20 @@ function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
 }
 
+function areSetsEqual<T>(left: Set<T>, right: Set<T>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps) {
   const [clientId, setClientId] = useState("");
   const [token, setToken] = useState("");
@@ -341,8 +355,8 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       setRenderTick((tick) => tick + 1);
     };
     const onActiveSpeakers = () => {
-      setActiveSpeakers(new Set(room.activeSpeakers.map((participant) => participant.identity)));
-      refresh();
+      const nextActiveSpeakers = new Set(room.activeSpeakers.map((participant) => participant.identity));
+      setActiveSpeakers((current) => (areSetsEqual(current, nextActiveSpeakers) ? current : nextActiveSpeakers));
     };
 
     room.on(RoomEvent.ParticipantConnected, refresh);
@@ -822,7 +836,10 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     [identity, publishEnvelope]
   );
 
-  const videoTiles = (() => {
+  const videoTiles = useMemo(() => {
+    const trackGraphVersion = renderTick;
+    void trackGraphVersion;
+
     if (!room) {
       return [] as VideoTile[];
     }
@@ -870,9 +887,12 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     }
 
     return tiles;
-  })();
+  }, [followSpotlight, identity, renderTick, room, spotlightIdentity]);
 
-  const audioTracks = (() => {
+  const audioTracks = useMemo(() => {
+    const trackGraphVersion = renderTick;
+    void trackGraphVersion;
+
     if (!room) {
       return [] as AudioTrackItem[];
     }
@@ -893,7 +913,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
     });
 
     return tracks;
-  })();
+  }, [renderTick, room]);
 
   const activeWhispers = Object.values(whispers).sort((a, b) => b.updatedAt - a.updatedAt);
   const participantRoster = Array.from(new Set([identity, ...Array.from(room?.remoteParticipants.keys() ?? [])]))
@@ -1063,7 +1083,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                       data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
                       className={`tile-enter group relative overflow-hidden bg-black ${
                         isSpotlighted ? "shadow-[inset_0_0_0_2px_var(--c-gold)]" : ""
-                      } ${isActiveSpeaker && !isSpotlighted ? "speaking-edge" : ""}`}
+                      }`}
                       style={{ animationDelay: `${idx * 50}ms` }}
                     >
                       <TrackElement
@@ -1071,6 +1091,14 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                         kind="video"
                         muted={tile.isLocal}
                         className="absolute inset-0 h-full w-full bg-black object-cover"
+                      />
+                      <div
+                        aria-hidden="true"
+                        className={`pointer-events-none absolute inset-0 border-2 transition-opacity duration-150 ${
+                          isActiveSpeaker && !isSpotlighted
+                            ? "border-[color:rgba(52,211,153,0.65)] opacity-100"
+                            : "border-transparent opacity-0"
+                        }`}
                       />
 
                       {/* Bottom gradient — appears on hover */}
