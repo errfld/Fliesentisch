@@ -896,11 +896,6 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
   })();
 
   const activeWhispers = Object.values(whispers).sort((a, b) => b.updatedAt - a.updatedAt);
-  const spotlightTile = spotlightIdentity ? videoTiles.find((tile) => tile.identity === spotlightIdentity) : undefined;
-  const selfTile = videoTiles.find((tile) => tile.isLocal);
-  const stageTile = spotlightTile ?? videoTiles.find((tile) => !tile.isLocal) ?? selfTile;
-  const selfPreviewTile = selfTile && selfTile.key !== stageTile?.key ? selfTile : undefined;
-  const railTiles = videoTiles.filter((tile) => tile.key !== stageTile?.key && tile.key !== selfPreviewTile?.key);
   const participantRoster = Array.from(new Set([identity, ...Array.from(room?.remoteParticipants.keys() ?? [])]))
     .map((participantIdentity) => {
       const whisper = activeWhispers.find((entry) => entry.members.includes(participantIdentity));
@@ -930,285 +925,321 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
       return a.label.localeCompare(b.label);
     });
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const gridTiles = useMemo(() => {
+    const allTiles = [...videoTiles];
+    if (spotlightIdentity) {
+      const spotIdx = allTiles.findIndex((t) => t.identity === spotlightIdentity);
+      if (spotIdx > 0) {
+        const [tile] = allTiles.splice(spotIdx, 1);
+        allTiles.unshift(tile);
+      }
+    }
+    return allTiles;
+  }, [videoTiles, spotlightIdentity]);
+
+  const gridCount = Math.min(gridTiles.length, 12);
+
   if (isConnecting) {
-    return <div className="panel">Connecting to room...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
+        <div className="text-center">
+          <p className="display-face text-xl text-[var(--c-text-warm)]">Entering the table</p>
+          <p className="mt-3 text-sm text-[var(--c-text-dim)]">Connecting to room...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="panel border-red-400 text-red-200">{error}</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
+        <div className="max-w-md text-center">
+          <p className="display-face text-xl text-[var(--c-ember)]">Connection Failed</p>
+          <p className="mt-3 text-sm text-[var(--c-text-dim)]">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   if (!room) {
-    return <div className="panel">Room is not connected.</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
+        <p className="text-sm text-[var(--c-text-dim)]">Room is not connected.</p>
+      </div>
+    );
   }
 
   return (
     <>
-      <div className="mx-auto grid max-w-[1480px] gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="rounded-[28px] border border-[#394643] bg-[#131b1e]/90 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.4)]">
-          <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#33403d] pb-5">
-            <div>
-              <h2 className="sr-only">Room: {roomName}</h2>
-              <p className="text-sm text-[#c7d0ca]">Playing as {displayName}</p>
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[#99aaa4]">
-                <span>{participantRoster.length} online</span>
-                <span>{activeWhispers.length} whisper{activeWhispers.length === 1 ? "" : "s"}</span>
-                <span>Spotlight {spotlightIdentity ? formatIdentityLabel(spotlightIdentity) : "auto"}</span>
-              </div>
-              <p className="sr-only">
-                You are <span className="font-mono">{identity}</span>
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn" onClick={toggleMic} type="button">
-                {micEnabled ? "Mute" : "Unmute"}
-              </button>
-              <button className="btn" onClick={toggleCamera} type="button">
-                {cameraEnabled ? "Camera Off" : "Camera On"}
-              </button>
-              <button className="btn" onClick={() => room.disconnect()} type="button">
-                Leave
-              </button>
-            </div>
-          </header>
+      <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--c-void)]">
+        {/* ── Top bar: a single thin strip, no box ── */}
+        <header className="z-20 flex shrink-0 items-center justify-between gap-6 bg-[var(--c-ink)] px-5 py-2">
+          <div className="flex items-baseline gap-4">
+            <h1 className="display-face text-sm text-[var(--c-text-warm)]">{roomName}</h1>
+            <h2 className="sr-only">Room: {roomName}</h2>
+            <p className="sr-only">You are <span className="font-mono">{identity}</span></p>
+            <nav className="hidden items-center gap-4 text-[11px] text-[var(--c-text-dim)] sm:flex">
+              <span>{participantRoster.length} at table</span>
+              <span className="text-[var(--c-text-faint)]">/</span>
+              <span>{activeWhispers.length} whisper{activeWhispers.length === 1 ? "" : "s"}</span>
+              {spotlightIdentity && (
+                <>
+                  <span className="text-[var(--c-text-faint)]">/</span>
+                  <span className="text-[var(--c-gold)]">{formatIdentityLabel(spotlightIdentity)}</span>
+                </>
+              )}
+            </nav>
+          </div>
 
-          <div className="mt-6 overflow-hidden rounded-[24px] border border-[#34413f] bg-[#0e1518]/92">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#33403d] bg-[#141d20]/88 px-5 py-4">
-              <div>
-                <p className="display-face text-[1.7rem] text-[#efdfc4]">Spotlight</p>
-                <p className="mt-1 text-sm text-[#aab8b2]">
-                  {stageTile ? "Pinned to the room's main view." : "Waiting for a camera to take the stage."}
-                </p>
-              </div>
-              <label className="hidden items-center gap-2 text-sm text-[#c4cec8] lg:flex">
-                <input
-                  type="checkbox"
-                  checked={followSpotlight}
-                  onChange={(event) => setFollowSpotlight(event.target.checked)}
-                />
-                Follow spotlight
-              </label>
-            </div>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-[11px] text-[var(--c-text-faint)] lg:block">{displayName}</span>
 
-            {stageTile ? (
-              <article
-                key={stageTile.key}
-                data-testid={`video-tile-${stageTile.identity}-${stageTile.trackSid}`}
-                className={`relative overflow-hidden bg-black ${
-                  stageTile.identity === spotlightIdentity ? "border-b border-[#d39b58]" : "border-b border-[#33403d]"
-                } ${activeSpeakers.has(stageTile.identity) ? "ring-2 ring-emerald-400/70" : ""}`}
+            {/* Toggle-style controls: just text that changes color */}
+            <button
+              className={`act ${micEnabled ? "act--on" : "act--hot"}`}
+              onClick={toggleMic}
+              type="button"
+            >
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${micEnabled ? "bg-[var(--c-emerald)]" : "bg-[var(--c-ember)]"}`} />
+              {micEnabled ? "Mute" : "Unmute"}
+            </button>
+            <button
+              className={`act ${cameraEnabled ? "act--gold" : ""}`}
+              onClick={toggleCamera}
+              type="button"
+            >
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${cameraEnabled ? "bg-[var(--c-gold)]" : "bg-[var(--c-text-faint)]"}`} />
+              {cameraEnabled ? "Camera Off" : "Camera On"}
+            </button>
+            <label className="act hidden cursor-pointer lg:inline-flex">
+              <input
+                type="checkbox"
+                checked={followSpotlight}
+                onChange={(event) => setFollowSpotlight(event.target.checked)}
+                className="sr-only"
+              />
+              <span className={`inline-block h-1.5 w-1.5 rounded-full transition-colors ${followSpotlight ? "bg-[var(--c-gold)]" : "bg-[var(--c-text-faint)]"}`} />
+              <span className={followSpotlight ? "text-[var(--c-text)]" : ""}>Follow</span>
+            </label>
+            <button
+              className="act"
+              onClick={() => setSidebarOpen((s) => !s)}
+              type="button"
+            >
+              {sidebarOpen ? "Close" : "Panel"}
+            </button>
+
+            <span className="h-3 w-px bg-[var(--c-rule)]" />
+
+            <button
+              className="act act--hot"
+              onClick={() => room.disconnect()}
+              type="button"
+            >
+              Leave
+            </button>
+          </div>
+        </header>
+
+        {/* ── Content ── */}
+        <div className="flex min-h-0 flex-1">
+          {/* ── Video grid: edge-to-edge, no padding, no rounded corners ── */}
+          <section className="relative min-w-0 flex-1">
+            {gridTiles.length > 0 ? (
+              <div
+                className="video-grid h-full"
+                data-count={String(gridCount)}
               >
-                <TrackElement
-                  track={stageTile.track}
-                  kind="video"
-                  muted={stageTile.isLocal}
-                  className="aspect-[21/9] w-full bg-black object-cover"
-                />
-                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.04)_0%,rgba(3,7,8,0.18)_44%,rgba(5,9,11,0.88)_100%)]" />
-                <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-4">
-                  <div>
-                    <p className="display-face text-[2.1rem] leading-none text-[#f7efe2]">
-                      {formatIdentityLabel(stageTile.identity)}
-                      {stageTile.isLocal ? " (you)" : ""}
-                    </p>
-                    <p className="mt-2 text-sm text-[#d5ddd8]/78">
-                      {activeSpeakers.has(stageTile.identity) ? "Speaking now" : "Present at the table"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {!stageTile.isLocal && (
-                      <button
-                        className={`rounded-lg border px-3 py-2 text-xs ${
-                          selectedParticipantIds.has(stageTile.identity)
-                            ? "border-[#d39b58] bg-[#6b4b24]/30 text-[#f3ddbf]"
-                            : "border-[#64706d] bg-black/30 text-[#ecf0ed]/82 hover:border-[#7f8a87]"
-                        }`}
-                        onClick={() => toggleParticipantSelection(stageTile.identity)}
-                        type="button"
-                        data-testid={`video-select-${stageTile.identity}-${stageTile.trackSid}`}
-                      >
-                        {selectedParticipantIds.has(stageTile.identity) ? "Selected" : "Select"}
-                      </button>
-                    )}
-                    <button
-                      className="rounded-lg border border-[#64706d] bg-black/30 px-3 py-2 text-xs text-[#ecf0ed]/82 hover:border-[#7f8a87]"
-                      onClick={() => void setSpotlight(spotlightIdentity === stageTile.identity ? null : stageTile.identity)}
-                      type="button"
-                    >
-                      {stageTile.identity === spotlightIdentity ? "Unspotlight" : "Spotlight"}
-                    </button>
-                  </div>
-                </div>
-
-                {selfPreviewTile && (
-                  <div className="absolute right-4 top-4 z-10 w-[6.5rem] sm:w-[8rem]">
-                    <article
-                      data-testid={`video-tile-${selfPreviewTile.identity}-${selfPreviewTile.trackSid}`}
-                      className="overflow-hidden rounded-xl border border-[#6e7671] bg-black/90 shadow-[0_14px_35px_rgba(0,0,0,0.35)]"
-                    >
-                      <TrackElement
-                        track={selfPreviewTile.track}
-                        kind="video"
-                        muted
-                        className="aspect-[4/5] w-full bg-black object-cover"
-                      />
-                      <div className="bg-black/70 px-3 py-2 text-xs text-[#ece9e1]/80">You</div>
-                    </article>
-                  </div>
-                )}
-              </article>
-            ) : (
-              <div className="m-4 rounded-[20px] border border-dashed border-[#53605d] bg-[#0c1215] p-14 text-center text-sm text-[#b1bdb7]">
-                No video tracks yet. Enable a camera to appear on stage.
-              </div>
-            )}
-
-            {railTiles.length > 0 && (
-              <div className="grid gap-3 border-t border-[#33403d] bg-[#121a1d]/90 p-4 md:grid-cols-3">
-                {railTiles.map((tile) => {
-                  const isSpotlight = tile.identity === spotlightIdentity;
-                  const isSelectedForInvite = !tile.isLocal && selectedParticipantIds.has(tile.identity);
+                {gridTiles.map((tile, idx) => {
+                  const isSpotlighted = tile.identity === spotlightIdentity;
                   const isActiveSpeaker = activeSpeakers.has(tile.identity);
+                  const isSelectedForInvite = !tile.isLocal && selectedParticipantIds.has(tile.identity);
 
                   return (
                     <article
                       key={tile.key}
                       data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
-                      className={`overflow-hidden rounded-[18px] border bg-black ${
-                        isSpotlight ? "border-[#d39b58]" : "border-[#495552]"
-                      } ${isActiveSpeaker ? "ring-2 ring-emerald-400/70" : ""}`}
+                      className={`tile-enter group relative overflow-hidden bg-black ${
+                        isSpotlighted ? "shadow-[inset_0_0_0_2px_var(--c-gold)]" : ""
+                      } ${isActiveSpeaker && !isSpotlighted ? "speaking-edge" : ""}`}
+                      style={{ animationDelay: `${idx * 50}ms` }}
                     >
                       <TrackElement
                         track={tile.track}
                         kind="video"
                         muted={tile.isLocal}
-                        className="aspect-[16/10] w-full bg-black object-cover"
+                        className="absolute inset-0 h-full w-full bg-black object-cover"
                       />
-                      <div className="border-t border-[#33403d] bg-[#141d20] p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-[#edf2ee]">
-                              {formatIdentityLabel(tile.identity)}
-                              {tile.isLocal ? " (you)" : ""}
-                            </p>
-                            <p className="mt-1 text-xs text-[#9fb0aa]">
-                              {isActiveSpeaker ? "Speaking" : "At table"}
-                            </p>
-                          </div>
-                          <div className="flex gap-1">
-                            {!tile.isLocal && (
-                              <button
-                                className={`rounded-lg border px-2.5 py-1 text-[11px] ${
-                                  isSelectedForInvite
-                                    ? "border-[#d39b58] bg-[#6b4b24]/30 text-[#f3ddbf]"
-                                    : "border-[#5b6864] bg-[#1b2528] text-[#dce4df]"
-                                }`}
-                                onClick={() => toggleParticipantSelection(tile.identity)}
-                                type="button"
-                                data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
-                              >
-                                {isSelectedForInvite ? "Selected" : "Select"}
-                              </button>
-                            )}
+
+                      {/* Bottom gradient — appears on hover */}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+
+                      {/* Identity + actions — flat text, no boxes */}
+                      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                        <div className="min-w-0">
+                          <p className="display-face truncate text-sm leading-tight text-white/90">
+                            {formatIdentityLabel(tile.identity)}
+                            {tile.isLocal ? " (you)" : ""}
+                          </p>
+                          {isActiveSpeaker && (
+                            <p className="mt-0.5 text-[10px] text-[var(--c-emerald)]">Speaking</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {!tile.isLocal && (
                             <button
-                              className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
-                              onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
+                              className={`act ${isSelectedForInvite ? "act--gold" : ""}`}
+                              onClick={() => toggleParticipantSelection(tile.identity)}
                               type="button"
+                              data-testid={`video-select-${tile.identity}-${tile.trackSid}`}
                             >
-                              {isSpotlight ? "Live" : "Spot"}
+                              {isSelectedForInvite ? "Selected" : "Select"}
                             </button>
-                          </div>
+                          )}
+                          <button
+                            className={`act ${isSpotlighted ? "act--gold" : ""}`}
+                            onClick={() => void setSpotlight(spotlightIdentity === tile.identity ? null : tile.identity)}
+                            type="button"
+                          >
+                            {isSpotlighted ? "Unpin" : "Spotlight"}
+                          </button>
                         </div>
                       </div>
+
+                      {/* Spotlight marker — a thin gold line at the top, not a badge-box */}
+                      {isSpotlighted && (
+                        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-3 pt-2">
+                          <span
+                            className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--c-gold)]"
+                            style={{ animation: "breathe 2s ease-in-out infinite" }}
+                          />
+                          <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--c-gold)]">
+                            Spotlight
+                          </span>
+                          <span className="h-px flex-1 bg-[var(--c-gold)]/30" />
+                        </div>
+                      )}
                     </article>
                   );
                 })}
               </div>
-            )}
-          </div>
-        </section>
-
-        <aside className="grid gap-4">
-          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="display-face text-[1.55rem] text-[#efdcbf]">Whispers</h3>
-              <button className="btn btn-accent px-3 py-2" onClick={() => void createWhisper()} type="button">
-                New Whisper
-              </button>
-            </div>
-
-            <div
-              className="mt-4 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3 text-xs text-[#b6c3bc]"
-              data-testid="whisper-selected-invitees"
-            >
-              Selected invitees: {selectedParticipants.length > 0 ? selectedParticipants.map(formatIdentityLabel).join(", ") : "none"}
-            </div>
-
-            <div
-              className="mt-3 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3 text-xs text-[#b6c3bc]"
-              data-testid="whisper-ptt-panel"
-            >
-              {selectedWhisper ? `Selected whisper: ${getWhisperLabel(selectedWhisper)}` : "No whisper selected"}
-              <br />
-              Hold <strong>V</strong> to talk. Press <strong>G</strong> to leave.
-              <br />
-              <span data-testid="whisper-ptt-status">PTT: {isPttActive ? "active" : "idle"}</span>
-            </div>
-
-            {whisperNotice && (
-              <div
-                className="mt-3 rounded-[16px] border border-[#c79655] bg-[#3d2912]/45 px-3 py-3 text-xs text-[#f0d7b5]"
-                data-testid="whisper-notice"
-              >
-                {whisperNotice}
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-center">
+                  <p className="display-face text-lg text-[var(--c-text-warm)]/30">No video feeds</p>
+                  <p className="mt-2 text-xs text-[var(--c-text-faint)]">Enable a camera to appear at the table</p>
+                </div>
               </div>
             )}
+          </section>
 
-            <ul className="mt-4 space-y-3">
-              {activeWhispers.length === 0 && (
-                <li className="rounded-[16px] border border-dashed border-[#5c6864] px-3 py-4 text-sm text-[#93a59f]">
-                  No active whispers.
-                </li>
-              )}
-              {activeWhispers.map((whisper) => {
-                const isMember = whisper.members.includes(identity);
-                const isSelected = selectedWhisperId === whisper.id;
+          {/* ── Sidebar: flat, typographic, no nested boxes ── */}
+          <aside
+            className={`z-10 flex shrink-0 flex-col bg-[var(--c-ink)] transition-[width] duration-300 ${
+              sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+            }`}
+          >
+            <div className="sidebar-scroll flex flex-1 flex-col overflow-y-auto">
 
-                return (
-                  <li
-                    key={whisper.id}
-                    className="rounded-[18px] border border-[#374441] bg-[#0f1619] p-3"
-                    data-testid={`whisper-card-${whisper.id}`}
+              {/* ── Whispers ── */}
+              <div className="px-5 pt-5 pb-4">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="display-face text-xs tracking-[0.08em] text-[var(--c-text-warm)]">WHISPERS</h3>
+                  <button
+                    aria-label="New Whisper"
+                    className="chip"
+                    onClick={() => void createWhisper()}
+                    type="button"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-[#edf2ee]">{getWhisperLabel(whisper)}</p>
-                        <p className="mt-1 text-xs text-[#95a6a1]" data-testid={`whisper-members-${whisper.id}`}>
-                          Members: {whisper.members.map(formatIdentityLabel).join(", ")}
-                          <span className="sr-only"> Raw members: {whisper.members.join(", ")}</span>
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-1">
+                    + New
+                  </button>
+                </div>
+
+                <p
+                  className="mt-4 text-[11px] text-[var(--c-text-dim)]"
+                  data-testid="whisper-selected-invitees"
+                >
+                  Invitees: {selectedParticipants.length > 0
+                    ? selectedParticipants.map(formatIdentityLabel).join(", ")
+                    : <span className="text-[var(--c-text-faint)]">none</span>}
+                </p>
+
+                <div
+                  className="mt-2 text-[11px] text-[var(--c-text-dim)]"
+                  data-testid="whisper-ptt-panel"
+                >
+                  {selectedWhisper
+                    ? <span>Active: <span className="text-[var(--c-text)]">{getWhisperLabel(selectedWhisper)}</span></span>
+                    : <span className="text-[var(--c-text-faint)]">No whisper selected</span>}
+                  <span className="mx-2 text-[var(--c-text-faint)]">/</span>
+                  <span className="text-[var(--c-text-faint)]">
+                    <strong className="text-[var(--c-text-dim)]">V</strong> talk
+                    <span className="mx-1">&middot;</span>
+                    <strong className="text-[var(--c-text-dim)]">G</strong> leave
+                  </span>
+                  <span className="mx-2 text-[var(--c-text-faint)]">/</span>
+                  <span data-testid="whisper-ptt-status" className={isPttActive ? "font-medium text-[var(--c-emerald)]" : "text-[var(--c-text-faint)]"}>
+                    PTT: {isPttActive ? "active" : "idle"}
+                  </span>
+                </div>
+
+                {whisperNotice && (
+                  <p
+                    className="mt-2 text-[11px] text-[var(--c-gold)]"
+                    data-testid="whisper-notice"
+                  >
+                    {whisperNotice}
+                  </p>
+                )}
+              </div>
+
+              {/* Whisper list — no card borders, just left-accent lines */}
+              <ul className="px-5 pb-4">
+                {activeWhispers.length === 0 && (
+                  <li className="py-3 text-[11px] italic text-[var(--c-text-faint)]">
+                    No active whispers.
+                  </li>
+                )}
+                {activeWhispers.map((whisper) => {
+                  const isMember = whisper.members.includes(identity);
+                  const isSelected = selectedWhisperId === whisper.id;
+
+                  return (
+                    <li
+                      key={whisper.id}
+                      className={`border-l-2 py-2.5 pl-3 transition-colors ${
+                        isSelected ? "border-[var(--c-gold)]" : "border-[var(--c-rule)]"
+                      }`}
+                      data-testid={`whisper-card-${whisper.id}`}
+                    >
+                      <p className="text-xs font-medium text-[var(--c-text)]">{getWhisperLabel(whisper)}</p>
+                      <p className="mt-0.5 text-[10px] text-[var(--c-text-dim)]" data-testid={`whisper-members-${whisper.id}`}>
+                        {whisper.members.map(formatIdentityLabel).join(", ")}
+                        <span className="sr-only"> Raw members: {whisper.members.join(", ")}</span>
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-3">
                         <button
-                          className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
+                          className={`act ${isSelected ? "act--gold" : ""}`}
                           onClick={() => setSelectedWhisperId(whisper.id)}
                           type="button"
                         >
-                          {isSelected ? "Selected" : "Select"}
+                          {isSelected ? "Active" : "Select"}
                         </button>
                         {isMember ? (
                           <>
                             {selectedParticipants.length > 0 && (
                               <button
-                                className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
+                                className="act"
                                 onClick={() => void addSelectedParticipantsToWhisper(whisper)}
                                 type="button"
                               >
-                                Add
+                                + Add
                               </button>
                             )}
                             <button
-                              className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
+                              className="act"
                               onClick={() => void leaveWhisper(whisper)}
                               type="button"
                             >
@@ -1217,7 +1248,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                           </>
                         ) : (
                           <button
-                            className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
+                            className="act act--emerald"
                             onClick={() => void joinWhisper(whisper)}
                             type="button"
                           >
@@ -1225,101 +1256,102 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
                           </button>
                         )}
                         <button
-                          className="rounded-lg border border-[#5b6864] bg-[#1b2528] px-2.5 py-1 text-[11px] text-[#dce4df]"
+                          className="act act--hot"
                           onClick={() => void closeWhisper(whisper)}
                           type="button"
                         >
                           Close
                         </button>
                       </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Divider — a single fine line */}
+              <div className="mx-5 h-px bg-[var(--c-rule)]" />
+
+              {/* ── Roster ── */}
+              <div className="px-5 pt-4 pb-4">
+                <h3 className="display-face text-xs tracking-[0.08em] text-[var(--c-text-warm)]">AT TABLE</h3>
+                <div className="mt-3">
+                  {participantRoster.map((participant, i) => (
+                    <div
+                      key={participant.identity}
+                      className={`flex items-center justify-between py-2 ${
+                        i < participantRoster.length - 1 ? "border-b border-[var(--c-rule)]" : ""
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-[var(--c-text)]">
+                          {participant.label}
+                          {participant.isLocal
+                            ? <span className="ml-1 text-[var(--c-text-faint)]">(you)</span>
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 text-[10px]">
+                        {participant.isSpotlight && (
+                          <span className="text-[var(--c-gold)]">Spotlight</span>
+                        )}
+                        {participant.whisperLabel && !participant.isSpotlight && (
+                          <span className="text-teal-400">Whisper</span>
+                        )}
+                        {!participant.whisperLabel && !participant.isSpotlight && participant.isSpeaking && (
+                          <span className="text-[var(--c-emerald)]">Speaking</span>
+                        )}
+                        {!participant.whisperLabel && !participant.isSpotlight && !participant.isSpeaking && participant.hasVideo && (
+                          <span className="text-[var(--c-text-faint)]">Video</span>
+                        )}
+                        {!participant.whisperLabel && !participant.isSpotlight && !participant.isSpeaking && !participant.hasVideo && (
+                          <span className="text-[var(--c-text-faint)]">Audio</span>
+                        )}
+                      </div>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
-          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-            <h3 className="display-face text-[1.55rem] text-[#efdcbf]">At table</h3>
-            <div className="mt-4 space-y-2">
-              {participantRoster.map((participant) => (
-                <div key={participant.identity} className="flex items-center justify-between gap-3 rounded-[16px] border border-[#374441] bg-[#0f1619] px-3 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[#edf2ee]">
-                      {participant.label}
-                      {participant.isLocal ? " (you)" : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-[#95a6a1]">
-                      {participant.whisperLabel
-                        ? `Whisper / ${participant.whisperLabel}`
-                        : participant.isSpotlight
-                          ? "Spotlight"
-                          : participant.isSpeaking
-                            ? "Speaking"
-                            : participant.hasVideo
-                              ? "Video live"
-                              : "Audio only"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] text-[#b8c4bd]">
-                    {participant.isSpotlight && (
-                      <>
-                        <span className="h-2 w-2 rounded-full bg-[#d39b58]" />
-                        <span>Spotlight</span>
-                      </>
-                    )}
-                    {participant.whisperLabel && !participant.isSpotlight && (
-                      <>
-                        <span className="h-2 w-2 rounded-full bg-[#6ea798]" />
-                        <span>Whisper</span>
-                      </>
-                    )}
-                    {!participant.whisperLabel && !participant.isSpotlight && participant.isSpeaking && (
-                      <>
-                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                        <span>Speaking</span>
-                      </>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
+              </div>
 
-          <section className="rounded-[22px] border border-[#394643] bg-[#131b1e]/90 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-            <h3 className="display-face text-[1.55rem] text-[#efdcbf]">Devices</h3>
-            <div className="mt-4 grid gap-3">
-              <label className="text-xs text-[#dde4df]">
-                Microphone
-                <select
-                  className="field mt-2"
-                  value={selectedAudioDevice}
-                  onChange={(event) => void onSelectAudioDevice(event.target.value)}
-                >
-                  {audioDevices.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs text-[#dde4df]">
-                Camera
-                <select
-                  className="field mt-2"
-                  value={selectedVideoDevice}
-                  onChange={(event) => void onSelectVideoDevice(event.target.value)}
-                >
-                  {videoDevices.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {/* Divider */}
+              <div className="mx-5 h-px bg-[var(--c-rule)]" />
+
+              {/* ── Devices ── */}
+              <div className="px-5 pt-4 pb-5">
+                <h3 className="display-face text-xs tracking-[0.08em] text-[var(--c-text-warm)]">DEVICES</h3>
+                <div className="mt-3 space-y-4">
+                  <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
+                    Microphone
+                    <select
+                      className="field"
+                      value={selectedAudioDevice}
+                      onChange={(event) => void onSelectAudioDevice(event.target.value)}
+                    >
+                      {audioDevices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
+                    Camera
+                    <select
+                      className="field"
+                      value={selectedVideoDevice}
+                      onChange={(event) => void onSelectVideoDevice(event.target.value)}
+                    >
+                      {videoDevices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Camera ${device.deviceId.slice(0, 8)}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
-          </section>
-        </aside>
+          </aside>
+        </div>
       </div>
 
       {audioTracks.map((item) => (
