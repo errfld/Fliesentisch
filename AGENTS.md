@@ -3,6 +3,11 @@
 ## What to do
 - Save created plans **ALWAYS** in `docs/plans` folder. Save them with the pattern: 'yyyy-mm-dd_short-description'
 
+### Frontend Architecture
+- Put large screen-specific features under `frontend/src/features/<feature-name>/`.
+- Keep `frontend/src/components/` for shared, reusable UI primitives rather than full-screen controllers.
+- Keep route/session entry components thin: compose feature hooks and feature components instead of combining protocol, media, store, and UI logic in one file.
+
 ### PRs
 - before publishing a PR, review your changes again and fix issues proactively. Ask for clarification if in doubt.
 - create PR title in the format: 'type(module): short description' for example: "fix(Caddy): add missing env var"
