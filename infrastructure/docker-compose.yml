@@ -19,7 +19,6 @@ services:
       - .env
     environment:
       AUTH_BIND_ADDR: ${AUTH_BIND_ADDR:-0.0.0.0:8787}
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       JOIN_SECRET: ${JOIN_SECRET:-}

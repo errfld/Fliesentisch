@@ -12,7 +12,8 @@ Local-first monorepo for a LiveKit-based DnD virtual table with whisper audio ch
 3. Start app: `pnpm dev`
 
 Local auth note:
-- `infrastructure/.env` should include `APP_BASE_URL=http://localhost:3000` for local Vite dev.
+- `pnpm compose:up` rebuilds the auth image and starts the local stack.
+- `infrastructure/.env` must set `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`; `AUTH_BIND_ADDR`, `JOIN_SECRET`, `ALLOWED_ROOMS`, `TOKEN_TTL_SECONDS`, and `FRONTEND_ORIGINS` are optional.
 - If Vite logs `connect ECONNREFUSED 127.0.0.1:8787` for `/api/v1/token`, the auth service is not running on port `8787`; check the auth logs first.
 
 ## Structure
