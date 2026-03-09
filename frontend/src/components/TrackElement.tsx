@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { Track } from "livekit-client";
 
 type TrackElementProps = {
@@ -11,11 +11,18 @@ type TrackElementProps = {
   className?: string;
 };
 
-export function TrackElement({ track, kind, volume = 1, muted = false, className }: TrackElementProps) {
-  const ref = useRef<HTMLMediaElement | null>(null);
+export const TrackElement = memo(function TrackElement({
+  track,
+  kind,
+  volume = 1,
+  muted = false,
+  className
+}: TrackElementProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const element = ref.current;
+    const element = kind === "video" ? videoRef.current : audioRef.current;
     if (!element) {
       return;
     }
@@ -25,20 +32,18 @@ export function TrackElement({ track, kind, volume = 1, muted = false, className
     return () => {
       track.detach(element);
     };
-  }, [track]);
+  }, [kind, track]);
 
   useEffect(() => {
-    if (ref.current) {
-      ref.current.volume = volume;
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
     }
   }, [volume]);
 
   if (kind === "video") {
     return (
       <video
-        ref={(element) => {
-          ref.current = element;
-        }}
+        ref={videoRef}
         className={className}
         autoPlay
         playsInline
@@ -49,12 +54,10 @@ export function TrackElement({ track, kind, volume = 1, muted = false, className
 
   return (
     <audio
-      ref={(element) => {
-        ref.current = element;
-      }}
+      ref={audioRef}
       autoPlay
       playsInline
       hidden
     />
   );
-}
+});
