@@ -3,10 +3,54 @@ import { createUuid, getOrCreateClientId, toIdentity } from "@/lib/client-id";
 
 const STORAGE_KEY = "virtual-table-client-id";
 
+function createLocalStorageMock(): Storage {
+  const store = new Map<string, string>();
+
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value);
+    }
+  };
+}
+
+function ensureLocalStorage(): Storage {
+  const storage = window.localStorage as Partial<Storage> | undefined;
+  if (
+    storage &&
+    typeof storage.clear === "function" &&
+    typeof storage.getItem === "function" &&
+    typeof storage.setItem === "function"
+  ) {
+    return storage as Storage;
+  }
+
+  const mockStorage = createLocalStorageMock();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: mockStorage
+  });
+  return mockStorage;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  window.localStorage.clear();
+  ensureLocalStorage().clear();
 });
 
 describe("createUuid", () => {
@@ -42,7 +86,7 @@ describe("createUuid", () => {
 
 describe("getOrCreateClientId", () => {
   it("returns persisted client id when present", () => {
-    window.localStorage.setItem(STORAGE_KEY, "existing-id");
+    ensureLocalStorage().setItem(STORAGE_KEY, "existing-id");
 
     expect(getOrCreateClientId()).toBe("existing-id");
   });
@@ -53,7 +97,7 @@ describe("getOrCreateClientId", () => {
     const created = getOrCreateClientId();
 
     expect(created).toBe("22222222-2222-4222-8222-222222222222");
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(created);
+    expect(ensureLocalStorage().getItem(STORAGE_KEY)).toBe(created);
   });
 
   it("returns server identity when window is unavailable", () => {
