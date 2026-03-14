@@ -17,11 +17,17 @@ services:
       - .env
     environment:
       AUTH_BIND_ADDR: ${AUTH_BIND_ADDR:-0.0.0.0:8787}
+      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:-sqlite:///app/data/auth.db?mode=rwc}
+      AUTH_BOOTSTRAP_ADMIN_EMAILS: ${AUTH_BOOTSTRAP_ADMIN_EMAILS:-}
+      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: ${AUTH_BOOTSTRAP_GAMEMASTER_EMAILS:-}
+      AUTH_BOOTSTRAP_PLAYER_EMAILS: ${AUTH_BOOTSTRAP_PLAYER_EMAILS:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       JOIN_SECRET: ${JOIN_SECRET:-}
       ALLOWED_ROOMS: ${ALLOWED_ROOMS:-dnd-table-1}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS}
+    volumes:
+      - auth_data:/app/data
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/virtual-table-frontend:${IMAGE_TAG:-latest}
@@ -47,5 +53,6 @@ services:
       - auth
 
 volumes:
+  auth_data:
   caddy_data:
   caddy_config:

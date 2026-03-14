@@ -23,3 +23,7 @@ Local auth note:
 - `infrastructure`: docker compose, Caddy, LiveKit config, deploy scripts
 - `docs/contracts`: protocol and API contracts
 - `docs/plans`: implementation plans/session tracking
+
+## Auth Docs
+
+- `docs/google-oauth-onboarding.md`: Google Cloud and env setup for backend-owned OAuth
