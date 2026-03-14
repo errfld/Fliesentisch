@@ -12,6 +12,25 @@
     "compose:up": "docker compose -f infrastructure/docker-compose.yml up -d --build",
     "compose:down": "docker compose -f infrastructure/docker-compose.yml down"
   },
+  "pnpm": {
+    "overrides": {
+      "undici": "7.24.0"
+    },
+    "reviewNotes": {
+      "undici": {
+        "mitigates": [
+          "CVE-2026-1525",
+          "CVE-2026-1528",
+          "CVE-2026-2581",
+          "CVE-2026-1527",
+          "CVE-2026-2229",
+          "CVE-2026-1526"
+        ],
+        "reference": "https://github.com/nodejs/undici/releases/tag/v7.24.0",
+        "note": "Pinned for the current audit cleanup. Undici v7.24.2 is available for reviewer verification or follow-up adoption if acceptable."
+      }
+    }
+  },
   "devDependencies": {
     "turbo": "^2.8.14"
   }
