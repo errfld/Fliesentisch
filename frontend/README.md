@@ -17,6 +17,8 @@ pnpm dev
 - `VITE_JOIN_KEY` (optional): prefilled join key value on join form.
 - `AUTH_SERVICE_URL` (dev proxy): auth backend base URL used by Vite dev server to proxy `/api/v1/*` (default `http://127.0.0.1:8787`).
 
+If `/api/v1/token` proxy requests fail with `ECONNREFUSED 127.0.0.1:8787`, the auth backend is down. In local Docker-based dev, rerun `pnpm compose:up` and make sure `infrastructure/.env` sets `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`.
+
 ## Multi-client local smoke test
 
 Use Playwright CLI sessions to open multiple participants on one machine (no LAN HTTPS setup required):

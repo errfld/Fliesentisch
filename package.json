@@ -9,10 +9,10 @@
     "test": "turbo run test && cargo test --manifest-path backend/Cargo.toml",
     "lint": "turbo run lint && cargo fmt --manifest-path backend/Cargo.toml -- --check && cargo clippy --manifest-path backend/Cargo.toml --all-targets -- -D warnings",
     "typecheck": "turbo run typecheck",
-    "compose:up": "docker compose -f infrastructure/docker-compose.yml up -d",
+    "compose:up": "docker compose -f infrastructure/docker-compose.yml up -d --build",
     "compose:down": "docker compose -f infrastructure/docker-compose.yml down"
   },
   "devDependencies": {
-    "turbo": "^2.8.12"
+    "turbo": "^2.8.14"
   }
 }

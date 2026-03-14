@@ -165,7 +165,7 @@ describe("reduceWhisperState", () => {
     expect(next.spotlightIdentity).toBe("gm");
   });
 
-  it("keeps existing spotlight when snapshot spotlight identity is null", () => {
+  it("clears spotlight when snapshot spotlight identity is null", () => {
     const withSpotlight: WhisperCoreState = {
       ...baseState,
       spotlightIdentity: "gm"
@@ -174,6 +174,21 @@ describe("reduceWhisperState", () => {
     const snapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
       whispers: [whisper("w1", 10)],
       spotlightIdentity: null
+    });
+
+    const next = reduceWhisperState(withSpotlight, snapshot);
+
+    expect(next.spotlightIdentity).toBeUndefined();
+  });
+
+  it("keeps existing spotlight when snapshot spotlight identity is omitted", () => {
+    const withSpotlight: WhisperCoreState = {
+      ...baseState,
+      spotlightIdentity: "gm"
+    };
+
+    const snapshot = createEnvelope("STATE_SNAPSHOT", "bob", {
+      whispers: [whisper("w1", 10)]
     });
 
     const next = reduceWhisperState(withSpotlight, snapshot);
@@ -328,7 +343,7 @@ describe("reduceWhisperState", () => {
     expect(updated.mainVolume).toBe(1);
   });
 
-  it("keeps spotlight unchanged when SPOTLIGHT_UPDATE contains null identity", () => {
+  it("clears spotlight when SPOTLIGHT_UPDATE contains null identity", () => {
     const current: WhisperCoreState = {
       ...baseState,
       spotlightIdentity: "gm"
@@ -342,7 +357,7 @@ describe("reduceWhisperState", () => {
       })
     );
 
-    expect(next.spotlightIdentity).toBe("gm");
+    expect(next.spotlightIdentity).toBeUndefined();
   });
 
   it("normalizes members by removing duplicates on whisper create", () => {

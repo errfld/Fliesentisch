@@ -102,7 +102,9 @@ export function reduceWhisperState(
       );
       nextWhispers = snapshotResult.whispers;
       nextClosedWhisperUpdatedAts = snapshotResult.closedWhisperUpdatedAts;
-      nextSpotlight = envelope.payload.spotlightIdentity ?? nextSpotlight;
+      if ("spotlightIdentity" in envelope.payload) {
+        nextSpotlight = envelope.payload.spotlightIdentity ?? undefined;
+      }
       break;
     }
     case "WHISPER_CREATE":
@@ -119,7 +121,7 @@ export function reduceWhisperState(
       break;
     }
     case "SPOTLIGHT_UPDATE": {
-      nextSpotlight = applySpotlight(nextSpotlight, envelope.payload);
+      nextSpotlight = applySpotlight(envelope.payload);
       break;
     }
     default:
@@ -253,8 +255,8 @@ function applyWhisperClose(
   };
 }
 
-function applySpotlight(current: string | undefined, payload: SpotlightPayload): string | undefined {
-  return payload.identity ?? current;
+function applySpotlight(payload: SpotlightPayload): string | undefined {
+  return payload.identity ?? undefined;
 }
 
 function normalizeWhisper(whisper: Whisper): Whisper {

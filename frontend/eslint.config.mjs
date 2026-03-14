@@ -5,7 +5,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "node_modules", ".tanstack", ".vinxi", "src/routeTree.gen.ts"]
+    ignores: ["dist", "node_modules", ".next", ".tanstack", ".vinxi", "src/routeTree.gen.ts"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
