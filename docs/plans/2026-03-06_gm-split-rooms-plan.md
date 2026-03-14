@@ -1,86 +1,104 @@
 # GM-Controlled Split Rooms
 
 ## Summary
-- Add a new `Split Mode` that coexists with the current whisper feature.
-- During a split, the table is partitioned into the default `Main Table` plus up to 3 GM-named side rooms.
-- Players only see and hear participants in their current room, while the GM always sees all players, is visually present to all rooms, and can listen/talk to one focused room at a time or broadcast to all rooms.
-- This is a GM-only feature. There is exactly one GM per session, derived from authenticated role data, and split controls must be treated as server-authoritative.
-- Reconnects restore each player to their assigned room. The GM ends the split explicitly with a merge action.
+- Add a GM-only `Split Mode` that partitions one table into `Main Table` plus up to 3 GM-named side rooms.
+- During a split, players only see and hear participants assigned to their room. The GM sees all participants, can talk to one focused room, and can optionally broadcast to every room.
+- Reconnects must restore room assignment from trusted state, not from client memory.
+- Existing whispers remain available, but only within the participant's current split room.
 
-## Key Changes
-### Roles and trusted state
-- Extend session/token/bootstrap data to expose a trusted participant role: `GM | PLAYER`.
-- Gate all split-room controls to the GM; non-GM split commands must be rejected or ignored.
-- Treat this feature as dependent on the auth/role work, since the current repo does not yet have authenticated session roles.
+## Current Baseline After Merging `main`
+- The room route is now thin: `frontend/src/routes/room.$room.tsx` renders `frontend/src/components/RoomSession.tsx`, which composes feature hooks and UI from `frontend/src/features/room-session/`.
+- Realtime room state is currently client-coordinated for whispers and spotlight:
+  - protocol types live in `frontend/src/lib/protocol.ts`
+  - whisper state lives in `frontend/src/store/whisperStore.ts`
+  - message handling and selective whisper subscriptions live in `frontend/src/features/room-session/hooks/useWhisperSession.ts`
+- The backend is still only a token-minting service in `backend/src/main.rs`. It validates room and join key, but it does not expose trusted `GM | PLAYER` roles or maintain authoritative room state.
 
-### Shared split model and protocol
-- Add split-state alongside the existing whisper state, not as a replacement.
-- Model:
-  - `splitActive: boolean`
-  - `rooms: [{ id, name, kind: "main" | "side" }]`
-  - `assignments: Record<participantIdentity, roomId>`
-  - `gmFocusRoomId?: string`
-  - `gmBroadcastActive: boolean`
-  - `updatedAt`
-- GM is a global observer, not a room member.
-- Add protocol and snapshot events for:
-  - split start and end
-  - side-room create, rename, remove
-  - player move and reassign
-  - GM focus change
-  - GM broadcast on and off
-- Keep whispers available during split, but only within the participant's current room. Cross-room whispers are disallowed.
+## Architectural Constraint
+- The current whisper design is cooperative. Clients receive room data over LiveKit and locally choose which tracks to subscribe to.
+- That is sufficient for whispers, but it is not enough to make GM-controlled split rooms truly server-authoritative.
+- Before implementation starts, we need one explicit product decision:
+  - Recommended v1: keep one LiveKit room, add trusted GM authority plus authoritative split-state distribution, and accept that isolation is enforced by the shipped client rather than by transport-level hard security.
+  - Stronger but much larger option: represent split rooms as separate LiveKit rooms or server-managed subscription permissions. That changes reconnect, GM presence, and broadcast design substantially.
 
-### Media and UI behavior
-- When split is active, player clients must subscribe only to:
-  - audio and video from their assigned room
-  - GM video in all cases
-  - GM audio only when the GM is focused on their room or broadcasting
-- Off-room player tracks must be unsubscribed, not merely hidden or muted.
-- `Main Table` behaves like another isolated room during split mode.
-- GM UI:
-  - create and rename up to 3 side rooms
-  - move players between `Main Table` and side rooms
-  - see room occupancy at a glance
-  - switch focus room
-  - toggle global broadcast
-  - merge everyone back to the normal table
-- Player UI:
-  - show current room name and current room members
-  - hide off-room participants
-  - show a clear notice when the GM moves them
-  - keep same-room whisper controls available
+## Preconditions
+1. Add trusted participant role data to the join/bootstrap path.
+   - Extend `backend/src/main.rs` and `docs/contracts/token-api.md` so the frontend can reliably distinguish `GM` from `PLAYER`.
+   - Do not gate split controls from display name or query params.
+2. Introduce an authoritative split-state source.
+   - Current `STATE_SNAPSHOT` handling is peer-to-peer. Split-room assignment, focus, and broadcast state should not be authored by arbitrary clients.
+   - Minimum acceptable shape: one trusted publisher path for split-state snapshots and updates, plus rejection of non-GM commands.
 
-## Public Interfaces / Types
-- Add trusted role data to the room/session bootstrap path used by the frontend.
-- Extend the client protocol with split-room event types and a split snapshot payload.
-- Add frontend state types for split rooms, assignments, GM focus, and GM broadcast state.
+## Recommended Implementation Slices
+1. Extend the protocol and contracts for split state.
+   - Update `frontend/src/lib/protocol.ts` and `docs/contracts/datachannel-protocol.md`.
+   - Add `SplitRoom`, `SplitAssignment`, and `SplitState` types.
+   - Add authoritative events for split start/end, room upsert/remove, assignment changes, GM focus, and GM broadcast.
+   - Keep whisper and spotlight payloads separate; split state should coexist with them, not replace them.
+2. Add a dedicated split-room state layer beside whisper state.
+   - Create a new store and hook under `frontend/src/features/room-session/`, for example `hooks/useSplitRoomSession.ts` plus a `splitRoomStore`.
+   - Mirror the current room-session architecture instead of expanding `frontend/src/components/RoomSession.tsx` into another monolith.
+   - Keep route/session entry components thin and push room-state logic into feature hooks/selectors.
+3. Refactor media subscription control into one place.
+   - Today, whisper audio subscription rules are embedded in `frontend/src/features/room-session/hooks/useWhisperSession.ts`.
+   - Split rooms need one subscription policy that considers:
+     - current split assignment
+     - whisper membership
+     - GM focus room
+     - GM broadcast state
+   - Expected outcome: move track-subscription decisions into a shared helper or hook used by room-session composition.
+4. Add split-aware selectors for the current room view.
+   - Extend `frontend/src/features/room-session/lib/session-selectors.ts` so roster, grid, and audio layers derive from the active split-room view.
+   - `Main Table` should behave like any other room during a split.
+   - Same-room whispers stay visible; off-room whispers are hidden or rejected.
+5. Add GM UI without breaking the current layout seams.
+   - Add a dedicated split-room control panel under `frontend/src/features/room-session/components/`.
+   - Likely touchpoints:
+     - `frontend/src/features/room-session/components/RoomTopBar.tsx`
+     - `frontend/src/features/room-session/components/SessionSidebar.tsx`
+     - `frontend/src/features/room-session/components/ParticipantRoster.tsx`
+   - GM capabilities:
+     - create, rename, and remove up to 3 side rooms
+     - move players between rooms
+     - see per-room occupancy
+     - focus one room
+     - toggle broadcast
+     - merge everyone back to the common table
+6. Add player-facing split-room feedback.
+   - Show current room name and room membership.
+   - Show a clear notice when a GM moves the player.
+   - Hide off-room participants from visible roster and video grid.
+   - Keep whisper affordances only for participants in the same current room.
+
+## Behavioral Rules
+- Exactly one GM per session.
+- Players not explicitly moved stay in `Main Table`.
+- The GM is not assigned like a normal player. The GM remains globally visible and can target audio by focus room or broadcast mode.
+- Reconnect restores the last authoritative assignment and split-state snapshot.
+- Global spotlight should be suspended during split mode unless we intentionally redesign how spotlight interacts with room isolation.
 
 ## Test Plan
-- Unit tests for split-state reducers and protocol handling:
-  - split start and end
-  - room create and rename
-  - player reassignment
-  - focus changes
-  - broadcast toggling
-  - reconnect snapshot restoration
+- Unit tests:
+  - split-state reducers and selectors
+  - assignment reconciliation on snapshot restore
+  - non-GM command rejection
   - cross-room whisper rejection
-  - non-GM control rejection
-- Multi-client Playwright coverage with simultaneous sessions:
-  - GM + players split across `Main Table` and 2 side rooms
-  - players only see and hear their own room
-  - GM sees all players at once
-  - only the focused room hears the GM
-  - broadcast reaches all rooms without letting players hear each other across rooms
-  - moved players get reassignment feedback and their visible/audible participants update immediately
-  - refresh and reconnect restores assigned room
-  - merge returns everyone to the common table and restores existing behavior
-- Use the repo's multi-client flow for realtime validation, not a single-browser test.
+  - GM focus and broadcast transitions
+- Frontend integration tests:
+  - split-aware roster, grid, and audio subscription behavior
+  - player move notifications
+  - merge back to common table
+- Realtime browser validation:
+  - use the multi-client flow, not a single browser
+  - start simultaneous clients with `pnpm --filter frontend clients:start -- Alice Bob Carol`
+  - verify GM + multiple players across `Main Table` and side rooms
+  - verify reconnect/refresh restores assignments correctly
 
-## Assumptions and Defaults
-- Exactly one GM per session.
-- Up to 3 named side rooms, plus the default `Main Table`.
-- Players not explicitly moved stay in `Main Table`.
-- GM remains visually visible in every room while split mode is active.
-- GM broadcast affects only GM outbound audio; player-to-player isolation remains intact.
-- Existing global spotlight should be suspended during split mode unless explicitly redesigned later, to avoid breaking room isolation.
+## First Implementation Milestone
+- Do not start with the GM control panel.
+- First land the authority seam:
+  - trusted frontend role data
+  - split-state contract draft
+  - authoritative snapshot/update path
+  - tests proving reconnect and non-GM rejection
+- Once that exists, the UI and subscription work can be layered on top without rewriting the new room-session architecture again.
