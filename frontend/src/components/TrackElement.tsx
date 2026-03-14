@@ -54,13 +54,13 @@ export const TrackElement = memo(function TrackElement({
     element.muted = muted;
     element.className = className ?? "";
     element.hidden = kind === "audio";
-  }, [className, kind, muted]);
+  }, [className, kind, muted, track]);
 
   useEffect(() => {
     if (kind === "audio" && mediaElementRef.current instanceof HTMLAudioElement) {
       mediaElementRef.current.volume = volume;
     }
-  }, [kind, volume]);
+  }, [kind, volume, track]);
 
   return <div ref={containerRef} className={kind === "audio" ? "hidden" : "h-full w-full"} />;
 });

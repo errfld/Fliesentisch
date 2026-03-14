@@ -171,12 +171,16 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
       RoomEvent.TrackSubscriptionStatusChanged
     ] as const;
 
-    refreshEvents.forEach((eventName) => room.on(eventName, refresh));
+    refreshEvents.forEach((eventName) => {
+      room.on(eventName, refresh);
+    });
     room.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
     room.on(RoomEvent.Disconnected, onDisconnected);
 
     return () => {
-      refreshEvents.forEach((eventName) => room.off(eventName, refresh));
+      refreshEvents.forEach((eventName) => {
+        room.off(eventName, refresh);
+      });
       room.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
       room.off(RoomEvent.Disconnected, onDisconnected);
     };
