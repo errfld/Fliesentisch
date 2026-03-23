@@ -5,6 +5,8 @@ type DevicePanelProps = {
   videoDevices: MediaDeviceInfo[];
   selectedAudioDevice: string;
   selectedVideoDevice: string;
+  mirrorSelfView: boolean;
+  onMirrorSelfViewChange: (mirrored: boolean) => void;
   onSelectAudioDevice: (deviceId: string) => Promise<void>;
   onSelectVideoDevice: (deviceId: string) => Promise<void>;
 };
@@ -14,6 +16,8 @@ export function DevicePanel({
   videoDevices,
   selectedAudioDevice,
   selectedVideoDevice,
+  mirrorSelfView,
+  onMirrorSelfViewChange,
   onSelectAudioDevice,
   onSelectVideoDevice
 }: DevicePanelProps) {
@@ -62,6 +66,21 @@ export function DevicePanel({
               </option>
             ))}
           </select>
+        </label>
+        <label
+          className="flex items-center justify-between gap-4 border border-[var(--c-rule)] bg-[var(--c-slab)]/70 px-3 py-2"
+          data-testid="mirror-self-view-toggle"
+        >
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.08em] text-[var(--c-text-dim)]">Mirror self-view</p>
+            <p className="mt-1 text-[11px] text-[var(--c-text-faint)]">Applies only to your local camera tile.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={mirrorSelfView}
+            onChange={(event) => onMirrorSelfViewChange(event.target.checked)}
+            className="h-4 w-4 accent-[var(--c-gold)]"
+          />
         </label>
         {deviceError && <p className="text-[11px] text-[var(--c-gold)]">{deviceError}</p>}
       </div>

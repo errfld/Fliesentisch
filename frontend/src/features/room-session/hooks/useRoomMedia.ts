@@ -13,6 +13,8 @@ import {
   MEDIA_ACCESS_ERROR
 } from "@/features/room-session/lib/session-helpers";
 
+const MIRROR_SELF_VIEW_STORAGE_KEY = "virtual-table-mirror-self-view";
+
 type UseRoomMediaInput = {
   room: Room | null;
 };
@@ -27,6 +29,13 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState("");
   const [selectedVideoDevice, setSelectedVideoDevice] = useState("");
+  const [mirrorSelfView, setMirrorSelfView] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(MIRROR_SELF_VIEW_STORAGE_KEY) === "true";
+  });
 
   const mainTrackRef = useRef<LocalAudioTrack | null>(null);
   const mainPubRef = useRef<LocalTrackPublication | null>(null);
@@ -94,6 +103,14 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
     void loadDevices();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, mirrorSelfView ? "true" : "false");
+  }, [mirrorSelfView]);
 
   useEffect(() => {
     if (!room) {
@@ -313,6 +330,10 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     [room]
   );
 
+  const onMirrorSelfViewChange = useCallback((mirrored: boolean) => {
+    setMirrorSelfView(mirrored);
+  }, []);
+
   return {
     audioDevices,
     cameraEnabled,
@@ -320,7 +341,9 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     error,
     isInitializing,
     isPttActive,
+    mirrorSelfView,
     micEnabled,
+    onMirrorSelfViewChange,
     onSelectAudioDevice,
     onSelectVideoDevice,
     selectedAudioDevice,

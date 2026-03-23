@@ -169,6 +169,7 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
           spotlightIdentity={whisperSession.spotlightIdentity}
           activeSpeakers={connection.activeSpeakers}
           selectedParticipantIds={whisperSession.selectedParticipantIds}
+          mirrorSelfView={media.mirrorSelfView}
           onToggleParticipantSelection={whisperSession.toggleParticipantSelection}
           onToggleSpotlight={whisperSession.setSpotlight}
         />
@@ -200,6 +201,8 @@ export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps
               videoDevices={media.videoDevices}
               selectedAudioDevice={media.selectedAudioDevice}
               selectedVideoDevice={media.selectedVideoDevice}
+              mirrorSelfView={media.mirrorSelfView}
+              onMirrorSelfViewChange={media.onMirrorSelfViewChange}
               onSelectAudioDevice={media.onSelectAudioDevice}
               onSelectVideoDevice={media.onSelectVideoDevice}
             />
