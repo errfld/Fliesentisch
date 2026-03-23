@@ -3,6 +3,7 @@
 ## Summary
 - Add a GM-only `Split Mode` that partitions one table into `Main Table` plus up to 3 GM-named side rooms.
 - During a split, players only see and hear participants assigned to their room. The GM sees all participants, can talk to one focused room, and can optionally broadcast to every room.
+- Split-state commands and assignments must be authoritative. In the recommended one-room v1, transport isolation is still cooperative client behavior, not a hard security boundary.
 - Reconnects must restore room assignment from trusted state, not from client memory.
 - Existing whispers remain available, but only within the participant's current split room.
 
@@ -28,6 +29,15 @@
 2. Introduce an authoritative split-state source.
    - Current `STATE_SNAPSHOT` handling is peer-to-peer. Split-room assignment, focus, and broadcast state should not be authored by arbitrary clients.
    - Minimum acceptable shape: one trusted publisher path for split-state snapshots and updates, plus rejection of non-GM commands.
+
+## Auth Handoff Requirements
+- The frontend needs trusted role data before split controls render.
+- Minimum contract for auth/bootstrap work:
+  - stable participant identity used in split assignments
+  - trusted participant role: `GM | PLAYER`
+  - enough trusted session data for the room-session layer to know whether the local client may issue split commands
+- `frontend/src/features/room-session/hooks/useRoomConnection.ts` should expose the trusted role alongside `identity`, rather than forcing split-room logic to refetch or infer it later.
+- Do not couple split authorization to display names, query params, or client-generated flags.
 
 ## Recommended Implementation Slices
 1. Extend the protocol and contracts for split state.
