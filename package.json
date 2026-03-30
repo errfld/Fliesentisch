@@ -14,7 +14,9 @@
   },
   "pnpm": {
     "overrides": {
-      "undici": "7.24.0"
+      "undici": "7.24.0",
+      "flatted": "3.4.2",
+      "picomatch@^4.0.0": "4.0.4"
     },
     "reviewNotes": {
       "undici": {
