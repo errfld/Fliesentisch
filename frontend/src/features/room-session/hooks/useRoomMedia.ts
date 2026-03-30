@@ -29,13 +29,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState("");
   const [selectedVideoDevice, setSelectedVideoDevice] = useState("");
-  const [mirrorSelfView, setMirrorSelfView] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.localStorage.getItem(MIRROR_SELF_VIEW_STORAGE_KEY) === "true";
-  });
+  const [mirrorSelfView, setMirrorSelfView] = useState(false);
 
   const mainTrackRef = useRef<LocalAudioTrack | null>(null);
   const mainPubRef = useRef<LocalTrackPublication | null>(null);
@@ -109,8 +103,15 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
       return;
     }
 
-    window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, mirrorSelfView ? "true" : "false");
-  }, [mirrorSelfView]);
+    const storedMirrorSelfView = window.localStorage.getItem(MIRROR_SELF_VIEW_STORAGE_KEY);
+    const parsedMirrorSelfView = storedMirrorSelfView === "true";
+
+    if (storedMirrorSelfView === null) {
+      window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, "false");
+    }
+
+    setMirrorSelfView(parsedMirrorSelfView);
+  }, []);
 
   useEffect(() => {
     if (!room) {
@@ -331,6 +332,10 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   );
 
   const onMirrorSelfViewChange = useCallback((mirrored: boolean) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, mirrored ? "true" : "false");
+    }
+
     setMirrorSelfView(mirrored);
   }, []);
 
