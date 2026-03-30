@@ -18,46 +18,49 @@ export const TrackElement = memo(function TrackElement({
   muted = false,
   className
 }: TrackElementProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mediaElementRef = useRef<HTMLMediaElement | null>(null);
 
   useEffect(() => {
-    const element = kind === "video" ? videoRef.current : audioRef.current;
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const element = track.attach();
+    element.autoplay = true;
+    element.setAttribute("playsinline", "true");
+    container.replaceChildren(element);
+    mediaElementRef.current = element;
+
+    return () => {
+      track.detach(element);
+      element.pause();
+      element.srcObject = null;
+      element.remove();
+
+      if (mediaElementRef.current === element) {
+        mediaElementRef.current = null;
+      }
+    };
+  }, [track]);
+
+  useEffect(() => {
+    const element = mediaElementRef.current;
     if (!element) {
       return;
     }
 
-    track.attach(element);
-
-    return () => {
-      track.detach(element);
-    };
-  }, [kind, track]);
+    element.muted = muted;
+    element.className = className ?? "";
+    element.hidden = kind === "audio";
+  }, [className, kind, muted, track]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume;
+    if (kind === "audio" && mediaElementRef.current instanceof HTMLAudioElement) {
+      mediaElementRef.current.volume = volume;
     }
-  }, [volume]);
+  }, [kind, volume, track]);
 
-  if (kind === "video") {
-    return (
-      <video
-        ref={videoRef}
-        className={className}
-        autoPlay
-        playsInline
-        muted={muted}
-      />
-    );
-  }
-
-  return (
-    <audio
-      ref={audioRef}
-      autoPlay
-      playsInline
-      hidden
-    />
-  );
+  return <div ref={containerRef} className={kind === "audio" ? "hidden" : "h-full w-full"} />;
 });

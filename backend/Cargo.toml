@@ -11,11 +11,12 @@ http = "1.1.0"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls"] }
 thiserror = "2.0.18"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "signal"] }
 tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 tower = "0.5.1"

@@ -39,6 +39,24 @@ async function waitForRemoteTile(page: Page, identity: string): Promise<void> {
   await expect(page.locator(`[data-testid^="video-tile-${identity}-"]`).first()).toBeVisible();
 }
 
+async function waitForVideoPlayback(page: Page, identity: string): Promise<void> {
+  const video = page.locator(`[data-testid^="video-tile-${identity}-"] video`).first();
+  await expect(video).toBeVisible();
+  await expect
+    .poll(async () =>
+      video.evaluate((node) => {
+        const element = node as HTMLVideoElement;
+        return (
+          element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+          element.videoWidth > 0 &&
+          element.videoHeight > 0 &&
+          !element.paused
+        );
+      })
+    )
+    .toBe(true);
+}
+
 async function clickVideoSelect(page: Page, identity: string): Promise<void> {
   await page.locator(`[data-testid^="video-select-${identity}-"]`).first().click();
 }
@@ -48,6 +66,24 @@ async function whisperCardForMember(page: Page, memberIdentity: string) {
 }
 
 test.describe("whisper multi-client flows", () => {
+  test("renders live local and remote video in both sessions", async ({ browser }) => {
+    const alice = await openParticipant(browser, TEST_ROOM, "Alice");
+    const bob = await openParticipant(browser, TEST_ROOM, "Bob");
+
+    try {
+      await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
+      await Promise.all([
+        waitForVideoPlayback(alice.page, alice.identity),
+        waitForVideoPlayback(alice.page, bob.identity),
+        waitForVideoPlayback(bob.page, alice.identity),
+        waitForVideoPlayback(bob.page, bob.identity)
+      ]);
+    } finally {
+      await alice.context.close();
+      await bob.context.close();
+    }
+  });
+
   test("creates whisper with selected participant, supports V to talk, G to leave", async ({ browser }) => {
     const alice = await openParticipant(browser, TEST_ROOM, "Alice");
     const bob = await openParticipant(browser, TEST_ROOM, "Bob");

@@ -156,22 +156,31 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
       setActiveSpeakers((current) => (areSetsEqual(current, nextActiveSpeakers) ? current : nextActiveSpeakers));
     };
 
-    room.on(RoomEvent.ParticipantConnected, refresh);
-    room.on(RoomEvent.ParticipantDisconnected, refresh);
-    room.on(RoomEvent.TrackPublished, refresh);
-    room.on(RoomEvent.TrackUnpublished, refresh);
-    room.on(RoomEvent.TrackSubscribed, refresh);
-    room.on(RoomEvent.TrackUnsubscribed, refresh);
+    const refreshEvents = [
+      RoomEvent.ParticipantConnected,
+      RoomEvent.ParticipantDisconnected,
+      RoomEvent.TrackPublished,
+      RoomEvent.TrackUnpublished,
+      RoomEvent.TrackSubscribed,
+      RoomEvent.TrackUnsubscribed,
+      RoomEvent.LocalTrackPublished,
+      RoomEvent.LocalTrackUnpublished,
+      RoomEvent.TrackMuted,
+      RoomEvent.TrackUnmuted,
+      RoomEvent.TrackStreamStateChanged,
+      RoomEvent.TrackSubscriptionStatusChanged
+    ] as const;
+
+    refreshEvents.forEach((eventName) => {
+      room.on(eventName, refresh);
+    });
     room.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
     room.on(RoomEvent.Disconnected, onDisconnected);
 
     return () => {
-      room.off(RoomEvent.ParticipantConnected, refresh);
-      room.off(RoomEvent.ParticipantDisconnected, refresh);
-      room.off(RoomEvent.TrackPublished, refresh);
-      room.off(RoomEvent.TrackUnpublished, refresh);
-      room.off(RoomEvent.TrackSubscribed, refresh);
-      room.off(RoomEvent.TrackUnsubscribed, refresh);
+      refreshEvents.forEach((eventName) => {
+        room.off(eventName, refresh);
+      });
       room.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
       room.off(RoomEvent.Disconnected, onDisconnected);
     };

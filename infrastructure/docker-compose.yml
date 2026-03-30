@@ -19,6 +19,10 @@ services:
       - .env
     environment:
       AUTH_BIND_ADDR: ${AUTH_BIND_ADDR:-0.0.0.0:8787}
+      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:-sqlite:///app/data/auth.db?mode=rwc}
+      AUTH_BOOTSTRAP_ADMIN_EMAILS: ${AUTH_BOOTSTRAP_ADMIN_EMAILS:-}
+      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: ${AUTH_BOOTSTRAP_GAMEMASTER_EMAILS:-}
+      AUTH_BOOTSTRAP_PLAYER_EMAILS: ${AUTH_BOOTSTRAP_PLAYER_EMAILS:-}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       JOIN_SECRET: ${JOIN_SECRET:-}
@@ -26,6 +30,8 @@ services:
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3000}
     ports:
       - "8787:8787"
+    volumes:
+      - auth_data:/app/data
 
   frontend:
     build:
@@ -62,5 +68,6 @@ services:
       - auth
 
 volumes:
+  auth_data:
   caddy_data:
   caddy_config:
