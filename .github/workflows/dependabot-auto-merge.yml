@@ -18,7 +18,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Merge eligible Dependabot PR
+      - name: Approve and merge eligible Dependabot PR
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -27,31 +27,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${PR_NUMBER}" ]; then
+          if [ -z "${PR_NUMBER:-}" ]; then
             echo "No pull request is associated with this CI run."
             exit 0
           fi
 
-          attempts=0
-          pr_json=""
-
-          while [ "$attempts" -lt 6 ]; do
-            pr_json="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")"
-            mergeable="$(echo "$pr_json" | jq -r '.mergeable')"
-
-            if [ "$mergeable" != "null" ]; then
-              break
-            fi
-
-            attempts=$((attempts + 1))
-            sleep 5
-          done
-
+          pr_json="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")"
           author="$(echo "$pr_json" | jq -r '.user.login')"
           state="$(echo "$pr_json" | jq -r '.state')"
           draft="$(echo "$pr_json" | jq -r '.draft')"
           head_sha="$(echo "$pr_json" | jq -r '.head.sha')"
-          mergeable="$(echo "$pr_json" | jq -r '.mergeable')"
 
           if [ "$author" != "dependabot[bot]" ]; then
             echo "PR #${PR_NUMBER} is not authored by Dependabot."
@@ -59,17 +44,12 @@ jobs:
           fi
 
           if [ "$state" != "open" ] || [ "$draft" != "false" ]; then
-            echo "PR #${PR_NUMBER} is not mergeable because it is not open and ready."
+            echo "PR #${PR_NUMBER} is not open and ready to merge."
             exit 0
           fi
 
           if [ "$head_sha" != "$WORKFLOW_HEAD_SHA" ]; then
             echo "Skipping stale CI run for PR #${PR_NUMBER}."
-            exit 0
-          fi
-
-          if [ "$mergeable" != "true" ]; then
-            echo "PR #${PR_NUMBER} has conflicts or GitHub still cannot determine mergeability."
             exit 0
           fi
 
@@ -91,35 +71,27 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
               -f event="APPROVE" \
-              -f body="Auto-approving Dependabot update after CI passed."
+              -f body="Auto-approving Dependabot update so it can merge once required checks pass."
           fi
 
           attempts=0
+          mergeable="null"
 
           while [ "$attempts" -lt 6 ]; do
-            pr_json="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")"
-            mergeable_state="$(echo "$pr_json" | jq -r '.mergeable_state')"
+            mergeable="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.mergeable')"
 
-            case "$mergeable_state" in
-              clean|unstable|has_hooks)
-                break
-                ;;
-            esac
+            if [ "$mergeable" != "null" ]; then
+              break
+            fi
 
             attempts=$((attempts + 1))
             sleep 5
           done
 
-          mergeable_state="$(echo "$pr_json" | jq -r '.mergeable_state')"
-
-          case "$mergeable_state" in
-            clean|unstable|has_hooks)
-              ;;
-            *)
-              echo "PR #${PR_NUMBER} is not ready to merge (mergeable_state=${mergeable_state})."
-              exit 0
-              ;;
-          esac
+          if [ "$mergeable" != "true" ]; then
+            echo "PR #${PR_NUMBER} is not mergeable (mergeable=${mergeable})."
+            exit 0
+          fi
 
           gh api \
             --method PUT \
