@@ -8,6 +8,7 @@ type TrackElementProps = {
   kind: "video" | "audio";
   volume?: number;
   muted?: boolean;
+  mirrored?: boolean;
   className?: string;
 };
 
@@ -16,6 +17,7 @@ export const TrackElement = memo(function TrackElement({
   kind,
   volume = 1,
   muted = false,
+  mirrored = false,
   className
 }: TrackElementProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -54,7 +56,9 @@ export const TrackElement = memo(function TrackElement({
     element.muted = muted;
     element.className = className ?? "";
     element.hidden = kind === "audio";
-  }, [className, kind, muted, track]);
+    element.style.transform = kind === "video" && mirrored ? "scaleX(-1)" : "";
+    element.style.transformOrigin = kind === "video" && mirrored ? "center center" : "";
+  }, [className, kind, mirrored, muted, track]);
 
   useEffect(() => {
     if (kind === "audio" && mediaElementRef.current instanceof HTMLAudioElement) {

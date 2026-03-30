@@ -7,6 +7,7 @@ type VideoGridProps = {
   spotlightIdentity?: string;
   activeSpeakers: Set<string>;
   selectedParticipantIds: Set<string>;
+  mirrorSelfView: boolean;
   onToggleParticipantSelection: (participantIdentity: string) => void;
   onToggleSpotlight: (targetIdentity: string | null) => Promise<void>;
 };
@@ -17,6 +18,7 @@ export function VideoGrid({
   spotlightIdentity,
   activeSpeakers,
   selectedParticipantIds,
+  mirrorSelfView,
   onToggleParticipantSelection,
   onToggleSpotlight
 }: VideoGridProps) {
@@ -32,6 +34,7 @@ export function VideoGrid({
               isSpotlighted={tile.identity === spotlightIdentity}
               isActiveSpeaker={activeSpeakers.has(tile.identity)}
               isSelectedForInvite={!tile.isLocal && selectedParticipantIds.has(tile.identity)}
+              mirrorSelfView={mirrorSelfView}
               onToggleParticipantSelection={onToggleParticipantSelection}
               onToggleSpotlight={onToggleSpotlight}
             />
