@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { SplitState } from "@/lib/protocol";
 import { formatIdentityLabel, getWhisperLabel } from "@/features/room-session/lib/session-helpers";
-import { buildParticipantRoster, orderGridTiles } from "@/features/room-session/lib/session-selectors";
-import type { VideoTileModel } from "@/features/room-session/types";
+import {
+  buildParticipantRoster,
+  filterAudioTracksForSplitView,
+  filterParticipantIdentitiesForSplitView,
+  orderGridTiles,
+  resolveParticipantRoomId
+} from "@/features/room-session/lib/session-selectors";
+import type { AudioTrackModel, VideoTileModel } from "@/features/room-session/types";
 
 describe("room session selectors", () => {
   it("formats participant identities for display", () => {
@@ -93,5 +100,102 @@ describe("room session selectors", () => {
     ];
 
     expect(orderGridTiles(tiles, "alice").map((tile) => tile.identity)).toEqual(["alice", "bob"]);
+  });
+
+  it("resolves participants without assignments back to the main room", () => {
+    const splitState: SplitState = {
+      isActive: true,
+      rooms: [
+        { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+        { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+      ],
+      assignments: {
+        bob: "side-1",
+        carol: "missing-room"
+      },
+      gmIdentity: "gm",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    };
+
+    expect(resolveParticipantRoomId(splitState, "alice")).toBe("main");
+    expect(resolveParticipantRoomId(splitState, "bob")).toBe("side-1");
+    expect(resolveParticipantRoomId(splitState, "carol")).toBe("main");
+  });
+
+  it("filters participants to the viewer room plus the GM during split mode", () => {
+    const splitState: SplitState = {
+      isActive: true,
+      rooms: [
+        { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+        { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+      ],
+      assignments: {
+        alice: "main",
+        bob: "side-1",
+        carol: "side-1"
+      },
+      gmIdentity: "gm",
+      gmFocusRoomId: "side-1",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    };
+
+    expect(
+      filterParticipantIdentitiesForSplitView(["gm", "alice", "bob", "carol"], {
+        splitState,
+        viewerIdentity: "alice",
+        viewerIsGamemaster: false
+      })
+    ).toEqual(["gm", "alice"]);
+  });
+
+  it("only lets players hear the GM main track when focused or broadcasting to their room", () => {
+    const splitState: SplitState = {
+      isActive: true,
+      rooms: [
+        { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+        { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+      ],
+      assignments: {
+        alice: "main",
+        bob: "side-1"
+      },
+      gmIdentity: "gm",
+      gmFocusRoomId: "side-1",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    };
+
+    const audioTracks: AudioTrackModel[] = [
+      {
+        key: "gm-main",
+        identity: "gm",
+        track: {} as AudioTrackModel["track"],
+        isMain: true
+      },
+      {
+        key: "bob-main",
+        identity: "bob",
+        track: {} as AudioTrackModel["track"],
+        isMain: true
+      }
+    ];
+
+    expect(
+      filterAudioTracksForSplitView(audioTracks, {
+        splitState,
+        viewerIdentity: "alice",
+        viewerIsGamemaster: false
+      }).map((track) => track.identity)
+    ).toEqual([]);
+
+    expect(
+      filterAudioTracksForSplitView(audioTracks, {
+        splitState,
+        viewerIdentity: "bob",
+        viewerIsGamemaster: false
+      }).map((track) => track.identity)
+    ).toEqual(["gm", "bob"]);
   });
 });

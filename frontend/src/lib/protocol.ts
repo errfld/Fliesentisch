@@ -7,13 +7,41 @@ export type Whisper = {
   updatedAt: number;
 };
 
+export type SplitRoomKind = "main" | "side";
+
+export type SplitRoom = {
+  id: string;
+  name: string;
+  kind: SplitRoomKind;
+  updatedAt: number;
+};
+
+export type SplitState = {
+  isActive: boolean;
+  rooms: SplitRoom[];
+  assignments: Record<string, string>;
+  gmIdentity?: string;
+  gmFocusRoomId?: string;
+  gmBroadcastActive: boolean;
+  updatedAt: number;
+};
+
 export type ProtocolEventType =
   | "STATE_REQUEST"
   | "STATE_SNAPSHOT"
   | "WHISPER_CREATE"
   | "WHISPER_UPDATE"
   | "WHISPER_CLOSE"
-  | "SPOTLIGHT_UPDATE";
+  | "SPOTLIGHT_UPDATE"
+  | "SPLIT_STATE_REQUEST"
+  | "SPLIT_STATE_SNAPSHOT"
+  | "SPLIT_START"
+  | "SPLIT_END"
+  | "SPLIT_ROOM_UPSERT"
+  | "SPLIT_ROOM_REMOVE"
+  | "SPLIT_ASSIGNMENT_SET"
+  | "SPLIT_GM_FOCUS_UPDATE"
+  | "SPLIT_GM_BROADCAST_UPDATE";
 
 export type StateSnapshotPayload = {
   whispers: Whisper[];
@@ -27,6 +55,35 @@ export type WhisperClosePayload = {
 
 export type SpotlightPayload = {
   identity: string | null;
+  updatedAt: number;
+};
+
+export type SplitStateSnapshotPayload = {
+  splitState: SplitState;
+};
+
+export type SplitEndPayload = {
+  updatedAt: number;
+};
+
+export type SplitRoomRemovePayload = {
+  roomId: string;
+  updatedAt: number;
+};
+
+export type SplitAssignmentSetPayload = {
+  participantIdentity: string;
+  roomId: string;
+  updatedAt: number;
+};
+
+export type SplitGmFocusPayload = {
+  roomId: string | null;
+  updatedAt: number;
+};
+
+export type SplitGmBroadcastPayload = {
+  active: boolean;
   updatedAt: number;
 };
 
@@ -45,7 +102,16 @@ export type AnyProtocolEnvelope =
   | ProtocolEnvelope<"WHISPER_CREATE", Whisper>
   | ProtocolEnvelope<"WHISPER_UPDATE", Whisper>
   | ProtocolEnvelope<"WHISPER_CLOSE", WhisperClosePayload>
-  | ProtocolEnvelope<"SPOTLIGHT_UPDATE", SpotlightPayload>;
+  | ProtocolEnvelope<"SPOTLIGHT_UPDATE", SpotlightPayload>
+  | ProtocolEnvelope<"SPLIT_STATE_REQUEST", Record<string, never>>
+  | ProtocolEnvelope<"SPLIT_STATE_SNAPSHOT", SplitStateSnapshotPayload>
+  | ProtocolEnvelope<"SPLIT_START", SplitStateSnapshotPayload>
+  | ProtocolEnvelope<"SPLIT_END", SplitEndPayload>
+  | ProtocolEnvelope<"SPLIT_ROOM_UPSERT", SplitRoom>
+  | ProtocolEnvelope<"SPLIT_ROOM_REMOVE", SplitRoomRemovePayload>
+  | ProtocolEnvelope<"SPLIT_ASSIGNMENT_SET", SplitAssignmentSetPayload>
+  | ProtocolEnvelope<"SPLIT_GM_FOCUS_UPDATE", SplitGmFocusPayload>
+  | ProtocolEnvelope<"SPLIT_GM_BROADCAST_UPDATE", SplitGmBroadcastPayload>;
 
 export function createEnvelope<T extends ProtocolEventType, P>(
   type: T,

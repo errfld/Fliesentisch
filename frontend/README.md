@@ -19,6 +19,19 @@ pnpm dev
 
 If `/api/v1/token` proxy requests fail with `ECONNREFUSED 127.0.0.1:8787`, the auth backend is down. In local Docker-based dev, rerun `pnpm compose:up` and make sure `infrastructure/.env` sets `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`.
 
+## Simple Auth
+
+The home page now supports a small backend-owned auth flow:
+
+- sign in with an allowlisted email
+- backend sets a signed session cookie
+- `/api/v1/token` returns `game_role` when that session exists
+
+This is a transition path, not the final OAuth flow:
+
+- email ownership is not verified yet
+- legacy join-key entry still works when no session is present
+
 ## Multi-client local smoke test
 
 Use Playwright CLI sessions to open multiple participants on one machine (no LAN HTTPS setup required):

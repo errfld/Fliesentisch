@@ -92,4 +92,44 @@ describe("parseProtocolEnvelope", () => {
       actor: "alice"
     });
   });
+
+  it("parses a valid split-state snapshot envelope", () => {
+    const raw = JSON.stringify({
+      type: "SPLIT_STATE_SNAPSHOT",
+      v: 1,
+      eventId: "evt-split",
+      actor: "gm",
+      ts: 1700000000000,
+      payload: {
+        splitState: {
+          isActive: true,
+          rooms: [
+            { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+            { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+          ],
+          assignments: {
+            alice: "main",
+            bob: "side-1"
+          },
+          gmIdentity: "gm",
+          gmFocusRoomId: "side-1",
+          gmBroadcastActive: false,
+          updatedAt: 10
+        }
+      }
+    });
+
+    const parsed = parseProtocolEnvelope(raw);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed).toMatchObject({
+      type: "SPLIT_STATE_SNAPSHOT",
+      payload: {
+        splitState: {
+          gmIdentity: "gm",
+          gmFocusRoomId: "side-1"
+        }
+      }
+    });
+  });
 });
