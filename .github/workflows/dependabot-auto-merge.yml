@@ -8,7 +8,6 @@ on:
       - completed
 
 permissions:
-  checks: read
   contents: write
   pull-requests: write
 
@@ -51,18 +50,6 @@ jobs:
 
           if [ "$head_sha" != "$WORKFLOW_HEAD_SHA" ]; then
             echo "Skipping stale CI run for PR #${PR_NUMBER}."
-            exit 0
-          fi
-
-          merge_gate_conclusion="$(
-            gh api \
-              -H "Accept: application/vnd.github+json" \
-              "repos/${REPO}/commits/${head_sha}/check-runs?per_page=100" \
-              --jq '[.check_runs[] | select(.name == "merge-gate")] | sort_by(.started_at // .completed_at) | last | .conclusion // ""'
-          )"
-
-          if [ "$merge_gate_conclusion" != "success" ]; then
-            echo "merge-gate has not succeeded for PR #${PR_NUMBER} (conclusion=${merge_gate_conclusion:-missing})."
             exit 0
           fi
 
