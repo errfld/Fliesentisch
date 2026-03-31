@@ -496,6 +496,70 @@ impl IntoResponse for ApiError {
     }
 }
 
+async fn resolve_session_user(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<Option<StoredUser>, ApiError> {
+    let Some(claims) = read_session_claims(&state.config, jar)? else {
+        return Ok(None);
+    };
+
+    let user = state
+        .user_store
+        .find_active_user_by_email(&claims.email)
+        .await
+        .map_err(|_| ApiError::Internal)?;
+
+    Ok(user)
+}
+
+fn read_session_claims(
+    config: &AppConfig,
+    jar: &CookieJar,
+) -> Result<Option<SessionClaims>, ApiError> {
+    let Some(cookie) = jar.get(AUTH_SESSION_COOKIE) else {
+        return Ok(None);
+    };
+
+    let decoded = decode::<SessionClaims>(
+        cookie.value(),
+        &DecodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
+        &Validation::new(Algorithm::HS256),
+    )
+    .map_err(|_| ApiError::Unauthorized)?;
+
+    Ok(Some(decoded.claims))
+}
+
+fn create_session_token(
+    config: &AppConfig,
+    user: &StoredUser,
+    expires_at: DateTime<Utc>,
+) -> Result<String, ApiError> {
+    let claims = SessionClaims {
+        sub: user.normalized_email.clone(),
+        email: user.normalized_email.clone(),
+        nbf: Utc::now().timestamp(),
+        exp: expires_at.timestamp(),
+    };
+
+    encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
+    )
+    .map_err(|_| ApiError::Internal)
+}
+
+fn build_session_cookie(token: String, expires_at: DateTime<Utc>) -> Cookie<'static> {
+    let _ = expires_at;
+    Cookie::build((AUTH_SESSION_COOKIE, token))
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .path("/")
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -798,68 +862,4 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
-}
-
-async fn resolve_session_user(
-    state: &AppState,
-    jar: &CookieJar,
-) -> Result<Option<StoredUser>, ApiError> {
-    let Some(claims) = read_session_claims(&state.config, jar)? else {
-        return Ok(None);
-    };
-
-    let user = state
-        .user_store
-        .find_active_user_by_email(&claims.email)
-        .await
-        .map_err(|_| ApiError::Internal)?;
-
-    Ok(user)
-}
-
-fn read_session_claims(
-    config: &AppConfig,
-    jar: &CookieJar,
-) -> Result<Option<SessionClaims>, ApiError> {
-    let Some(cookie) = jar.get(AUTH_SESSION_COOKIE) else {
-        return Ok(None);
-    };
-
-    let decoded = decode::<SessionClaims>(
-        cookie.value(),
-        &DecodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
-        &Validation::new(Algorithm::HS256),
-    )
-    .map_err(|_| ApiError::Unauthorized)?;
-
-    Ok(Some(decoded.claims))
-}
-
-fn create_session_token(
-    config: &AppConfig,
-    user: &StoredUser,
-    expires_at: DateTime<Utc>,
-) -> Result<String, ApiError> {
-    let claims = SessionClaims {
-        sub: user.normalized_email.clone(),
-        email: user.normalized_email.clone(),
-        nbf: Utc::now().timestamp(),
-        exp: expires_at.timestamp(),
-    };
-
-    encode(
-        &Header::new(Algorithm::HS256),
-        &claims,
-        &EncodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
-    )
-    .map_err(|_| ApiError::Internal)
-}
-
-fn build_session_cookie(token: String, expires_at: DateTime<Utc>) -> Cookie<'static> {
-    let _ = expires_at;
-    Cookie::build((AUTH_SESSION_COOKIE, token))
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .path("/")
-        .build()
 }
