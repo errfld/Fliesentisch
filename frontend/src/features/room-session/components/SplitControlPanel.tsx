@@ -248,7 +248,7 @@ function ParticipantAssignmentRow({
 
       {isPinnedToGmRole ? (
         <p className="mt-3 text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-faint)]">
-          GM stays pinned to {assignedRoomName}
+          GM is globally visible across all rooms
         </p>
       ) : (
         <>

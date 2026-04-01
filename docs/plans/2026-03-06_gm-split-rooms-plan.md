@@ -1,6 +1,7 @@
 # GM-Controlled Split Rooms
 
 ## Summary
+
 - Add a GM-only `Split Mode` that partitions one table into `Main Table` plus up to 3 GM-named side rooms.
 - During a split, players only see and hear participants assigned to their room. The GM sees all participants, can talk to one focused room, and can optionally broadcast to every room.
 - Split-state commands and assignments must be authoritative. In the recommended one-room v1, transport isolation is still cooperative client behavior, not a hard security boundary.
@@ -8,6 +9,7 @@
 - Existing whispers remain available, but only within the participant's current split room.
 
 ## Current Baseline After Merging `main`
+
 - The room route is now thin: `frontend/src/routes/room.$room.tsx` renders `frontend/src/components/RoomSession.tsx`, which composes feature hooks and UI from `frontend/src/features/room-session/`.
 - Realtime room state is currently client-coordinated for whispers and spotlight:
   - protocol types live in `frontend/src/lib/protocol.ts`
@@ -16,6 +18,7 @@
 - The backend is still only a token-minting service in `backend/src/main.rs`. It validates room and join key, but it does not expose trusted `GM | PLAYER` roles or maintain authoritative room state.
 
 ## Architectural Constraint
+
 - The current whisper design is cooperative. Clients receive room data over LiveKit and locally choose which tracks to subscribe to.
 - That is sufficient for whispers, but it is not enough to make GM-controlled split rooms truly server-authoritative.
 - Before implementation starts, we need one explicit product decision:
@@ -23,6 +26,7 @@
   - Stronger but much larger option: represent split rooms as separate LiveKit rooms or server-managed subscription permissions. That changes reconnect, GM presence, and broadcast design substantially.
 
 ## Preconditions
+
 1. Add trusted participant role data to the join/bootstrap path.
    - Extend `backend/src/main.rs` and `docs/contracts/token-api.md` so the frontend can reliably distinguish `GM` from `PLAYER`.
    - Do not gate split controls from display name or query params.
@@ -31,6 +35,7 @@
    - Minimum acceptable shape: one trusted publisher path for split-state snapshots and updates, plus rejection of non-GM commands.
 
 ## Auth Handoff Requirements
+
 - The frontend needs trusted role data before split controls render.
 - Minimum contract for auth/bootstrap work:
   - stable participant identity used in split assignments
@@ -40,6 +45,7 @@
 - Do not couple split authorization to display names, query params, or client-generated flags.
 
 ## Recommended Implementation Slices
+
 1. Extend the protocol and contracts for split state.
    - Update `frontend/src/lib/protocol.ts` and `docs/contracts/datachannel-protocol.md`.
    - Add `SplitRoom`, `SplitAssignment`, and `SplitState` types.
@@ -81,6 +87,7 @@
    - Keep whisper affordances only for participants in the same current room.
 
 ## Behavioral Rules
+
 - Exactly one GM per session.
 - Players not explicitly moved stay in `Main Table`.
 - The GM is not assigned like a normal player. The GM remains globally visible and can target audio by focus room or broadcast mode.
@@ -88,6 +95,7 @@
 - Global spotlight should be suspended during split mode unless we intentionally redesign how spotlight interacts with room isolation.
 
 ## Test Plan
+
 - Unit tests:
   - split-state reducers and selectors
   - assignment reconciliation on snapshot restore
@@ -105,6 +113,7 @@
   - verify reconnect/refresh restores assignments correctly
 
 ## First Implementation Milestone
+
 - Do not start with the GM control panel.
 - First land the authority seam:
   - trusted frontend role data

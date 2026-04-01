@@ -158,14 +158,16 @@ describe("split-room-rules", () => {
   it("only accepts split snapshots and starts from a trusted GM sender", () => {
     const splitState = activeSplitState();
     const startEnvelope = createEnvelope("SPLIT_START", "gm", { splitState });
+    const snapshotEnvelope = createEnvelope("SPLIT_STATE_SNAPSHOT", "gm", { splitState });
+    const inactiveState = {
+      ...splitState,
+      isActive: false,
+      gmIdentity: undefined
+    };
 
     expect(
       shouldAcceptSplitEnvelopeFromSender({
-        currentState: {
-          ...splitState,
-          isActive: false,
-          gmIdentity: undefined
-        },
+        currentState: inactiveState,
         envelope: startEnvelope,
         senderIdentity: "gm",
         senderGameRole: "gamemaster"
@@ -173,11 +175,7 @@ describe("split-room-rules", () => {
     ).toBe(true);
     expect(
       shouldAcceptSplitEnvelopeFromSender({
-        currentState: {
-          ...splitState,
-          isActive: false,
-          gmIdentity: undefined
-        },
+        currentState: inactiveState,
         envelope: startEnvelope,
         senderIdentity: "gm",
         senderGameRole: "player"
@@ -187,6 +185,30 @@ describe("split-room-rules", () => {
       shouldAcceptSplitEnvelopeFromSender({
         currentState: splitState,
         envelope: startEnvelope,
+        senderIdentity: "other-gm",
+        senderGameRole: "gamemaster"
+      })
+    ).toBe(false);
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: inactiveState,
+        envelope: snapshotEnvelope,
+        senderIdentity: "gm",
+        senderGameRole: "gamemaster"
+      })
+    ).toBe(true);
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: inactiveState,
+        envelope: snapshotEnvelope,
+        senderIdentity: "gm",
+        senderGameRole: "player"
+      })
+    ).toBe(false);
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: splitState,
+        envelope: snapshotEnvelope,
         senderIdentity: "other-gm",
         senderGameRole: "gamemaster"
       })

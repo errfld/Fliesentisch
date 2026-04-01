@@ -12,6 +12,8 @@ type LoginResult = {
   error?: string;
 };
 
+const AUTH_UNAVAILABLE_MESSAGE = "Auth service unavailable.";
+
 export function useAuthSession() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,18 +23,22 @@ export function useAuthSession() {
     setIsLoading(true);
     try {
       const response = await fetch("/api/v1/auth/session");
-      if (!response.ok) {
+      if (response.ok) {
+        const body = (await response.json()) as AuthSession;
+        setSession(body);
+        setError(null);
+        return;
+      }
+
+      if (response.status === 401 || response.status === 404) {
         setSession(null);
         setError(null);
         return;
       }
 
-      const body = (await response.json()) as AuthSession;
-      setSession(body);
-      setError(null);
+      setError(AUTH_UNAVAILABLE_MESSAGE);
     } catch {
-      setSession(null);
-      setError("Unable to reach auth service.");
+      setError(AUTH_UNAVAILABLE_MESSAGE);
     } finally {
       setIsLoading(false);
     }
@@ -71,10 +77,16 @@ export function useAuthSession() {
 
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/v1/auth/logout", { method: "POST" });
-    } finally {
+      const response = await fetch("/api/v1/auth/logout", { method: "POST" });
+      if (!response.ok) {
+        setError("Sign-out failed.");
+        return;
+      }
+
       setSession(null);
       setError(null);
+    } catch {
+      setError("Unable to reach auth service.");
     }
   }, []);
 

@@ -1,43 +1,48 @@
-import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAuthSession } from "@/features/auth/hooks/useAuthSession";
 
-const DEFAULT_ROOM = import.meta.env.VITE_DEFAULT_ROOM ?? "dnd-table-1";
-const DEFAULT_JOIN_KEY = import.meta.env.VITE_JOIN_KEY ?? "";
+type JoinFormSession = {
+  email: string;
+  gameRole: string;
+  platformRole: string;
+};
 
-export function JoinForm() {
-  const navigate = useNavigate({ from: "/" });
-  const auth = useAuthSession();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [room, setRoom] = useState(DEFAULT_ROOM);
-  const [joinKey, setJoinKey] = useState(DEFAULT_JOIN_KEY);
-  const [authBusy, setAuthBusy] = useState(false);
+type JoinFormProps = {
+  authBusy: boolean;
+  authError: string | null;
+  authIsLoading: boolean;
+  authSession: JoinFormSession | null;
+  email: string;
+  isAuthenticated: boolean;
+  joinKey: string;
+  name: string;
+  onChangeEmail: (value: string) => void;
+  onChangeJoinKey: (value: string) => void;
+  onChangeName: (value: string) => void;
+  onChangeRoom: (value: string) => void;
+  onSignIn: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  onSignOut: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  room: string;
+};
 
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    void navigate({
-      to: "/room/$room",
-      params: { room: room.trim() || DEFAULT_ROOM },
-      search: {
-        name: name.trim() || "Player",
-        joinKey: auth.isAuthenticated ? undefined : joinKey.trim() || undefined
-      }
-    });
-  };
-
-  const onSignIn = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setAuthBusy(true);
-    try {
-      await auth.login(email.trim());
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
+export function JoinForm({
+  authBusy,
+  authError,
+  authIsLoading,
+  authSession,
+  email,
+  isAuthenticated,
+  joinKey,
+  name,
+  onChangeEmail,
+  onChangeJoinKey,
+  onChangeName,
+  onChangeRoom,
+  onSignIn,
+  onSignOut,
+  onSubmit,
+  room
+}: JoinFormProps) {
   return (
     <section className="w-full max-w-sm">
       <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--c-text-faint)]">Enter the room</p>
@@ -47,17 +52,17 @@ export function JoinForm() {
       </p>
       <div className="mt-6 rounded-md border border-[var(--c-rule)] bg-[color-mix(in_srgb,var(--c-ink)_78%,black)] p-4">
         <p className="display-face text-xs tracking-[0.08em] text-[var(--c-text-warm)]">Simple Auth</p>
-        {auth.isLoading ? (
+        {authIsLoading ? (
           <p className="mt-2 text-sm text-[var(--c-text-dim)]">Checking session…</p>
-        ) : auth.session ? (
+        ) : authSession ? (
           <div className="mt-2 space-y-3">
             <p className="text-sm text-[var(--c-text)]">
-              Signed in as <span className="font-medium">{auth.session.email}</span>
+              Signed in as <span className="font-medium">{authSession.email}</span>
             </p>
             <p className="text-[11px] text-[var(--c-text-faint)]">
-              Role: {auth.session.game_role} / {auth.session.platform_role}
+              Role: {authSession.gameRole} / {authSession.platformRole}
             </p>
-            <button className="act" onClick={() => void auth.logout()} type="button">
+            <button className="act" onClick={onSignOut} type="button">
               Sign out
             </button>
           </div>
@@ -68,7 +73,7 @@ export function JoinForm() {
               <input
                 className="field"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => onChangeEmail(event.target.value)}
                 placeholder="gm@example.com"
                 required
                 type="email"
@@ -83,7 +88,7 @@ export function JoinForm() {
             </p>
           </form>
         )}
-        {auth.error ? <p className="mt-3 text-[11px] text-[var(--c-ember)]">{auth.error}</p> : null}
+        {authError ? <p className="mt-3 text-[11px] text-[var(--c-ember)]">{authError}</p> : null}
       </div>
       <form className="mt-8 space-y-6" onSubmit={onSubmit}>
         <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
@@ -91,7 +96,7 @@ export function JoinForm() {
           <input
             className="field"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => onChangeName(event.target.value)}
             placeholder="Alice"
             required
           />
@@ -101,18 +106,18 @@ export function JoinForm() {
           <input
             className="field"
             value={room}
-            onChange={(event) => setRoom(event.target.value)}
+            onChange={(event) => onChangeRoom(event.target.value)}
             placeholder="dnd-table-1"
             required
           />
         </label>
-        {!auth.isAuthenticated ? (
+        {!isAuthenticated ? (
           <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
             Join key
             <input
               className="field"
               value={joinKey}
-              onChange={(event) => setJoinKey(event.target.value)}
+              onChange={(event) => onChangeJoinKey(event.target.value)}
               placeholder="Optional"
             />
           </label>

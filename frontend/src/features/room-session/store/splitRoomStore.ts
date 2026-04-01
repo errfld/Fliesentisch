@@ -34,6 +34,7 @@ type SplitRoomActions = {
   reset: () => void;
 };
 
+const MAX_SEEN_EVENT_IDS = 256;
 const inactiveSplitState = createInactiveSplitState();
 const initialState = createSplitRoomCoreState(inactiveSplitState);
 
@@ -84,7 +85,7 @@ export function reduceSplitRoomState(
     return state;
   }
 
-  const nextSeen: Record<string, true> = { ...state.seenEventIds, [envelope.eventId]: true };
+  const nextSeen = appendSeenEventId(state.seenEventIds, envelope.eventId);
 
   switch (envelope.type) {
     case "SPLIT_STATE_REQUEST":
@@ -135,7 +136,7 @@ function applySplitSnapshot(
 
   return {
     ...createSplitRoomCoreState(envelope.payload.splitState),
-    seenEventIds
+    seenEventIds: { [envelope.eventId]: true }
   };
 }
 
@@ -353,4 +354,18 @@ function ensureMainRoomFirst(roomOrder: string[], rooms: Record<string, SplitRoo
   const deduped = Array.from(new Set(roomOrder)).filter((roomId) => Boolean(rooms[roomId]));
   const withoutMain = deduped.filter((roomId) => roomId !== MAIN_SPLIT_ROOM_ID);
   return rooms[MAIN_SPLIT_ROOM_ID] ? [MAIN_SPLIT_ROOM_ID, ...withoutMain] : withoutMain;
+}
+
+function appendSeenEventId(seenEventIds: Record<string, true>, eventId: string): Record<string, true> {
+  const nextSeen: Record<string, true> = { ...seenEventIds, [eventId]: true };
+  const seenEventIdsOrder = Object.keys(nextSeen);
+  if (seenEventIdsOrder.length <= MAX_SEEN_EVENT_IDS) {
+    return nextSeen;
+  }
+
+  for (const seenId of seenEventIdsOrder.slice(0, seenEventIdsOrder.length - MAX_SEEN_EVENT_IDS)) {
+    delete nextSeen[seenId];
+  }
+
+  return nextSeen;
 }

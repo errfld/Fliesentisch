@@ -26,7 +26,9 @@ All messages are JSON objects:
 }
 ```
 
-## Split state snapshot payload
+## Split state payload (`SPLIT_STATE_SNAPSHOT` / `SPLIT_START`)
+
+Both `SPLIT_STATE_SNAPSHOT` and `SPLIT_START` use the same `{ "splitState": ... }` payload shape.
 
 ```json
 {

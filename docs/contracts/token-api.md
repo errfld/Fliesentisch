@@ -20,10 +20,11 @@
 ```json
 {
   "token": "jwt",
-  "expires_at": "2026-03-02T22:00:00Z",
-  "game_role": "gamemaster"
+  "expires_at": "2026-03-02T22:00:00Z"
 }
 ```
+
+`game_role` is included only when an authenticated backend session is present (`"gamemaster"` or `"player"`).
 
 ## Error
 

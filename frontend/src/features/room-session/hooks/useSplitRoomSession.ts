@@ -57,8 +57,6 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
         return true;
       } catch {
         return false;
-      } finally {
-        setIsPublishingCommand(false);
       }
     },
     [applyEnvelope, room]
@@ -189,8 +187,7 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
     [identity, splitState]
   );
   const currentRoomName =
-    splitState.rooms.find((room) => room.id === currentRoomId)?.name ??
-    (currentRoomId === MAIN_SPLIT_ROOM_ID ? MAIN_SPLIT_ROOM_NAME : MAIN_SPLIT_ROOM_NAME);
+    splitState.rooms.find((room) => room.id === currentRoomId)?.name ?? MAIN_SPLIT_ROOM_NAME;
 
   useEffect(() => {
     if (!identity) {

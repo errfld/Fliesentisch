@@ -295,8 +295,6 @@ export function useWhisperSession({
       }
 
       const now = Date.now();
-      await publishReassignmentMutations(whisper.id, [identity], now);
-
       const updated: Whisper = {
         ...whisper,
         members: Array.from(new Set([...whisper.members, identity])),
@@ -306,6 +304,8 @@ export function useWhisperSession({
         setWhisperNotice("You can only join whispers within one split room.");
         return;
       }
+
+      await publishReassignmentMutations(whisper.id, [identity], now);
 
       const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!didPublish) {
@@ -332,8 +332,6 @@ export function useWhisperSession({
       }
 
       const now = Date.now();
-      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
-
       const updated: Whisper = {
         ...whisper,
         members: Array.from(new Set([...whisper.members, ...participantsToAdd])),
@@ -343,6 +341,8 @@ export function useWhisperSession({
         setWhisperNotice("Whispers can only include participants from one split room.");
         return;
       }
+
+      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
 
       const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!didPublish) {

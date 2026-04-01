@@ -36,7 +36,7 @@ export function normalizeSplitRoomName(name: string, fallbackName: string): stri
   return trimmed ? trimmed.slice(0, 40) : fallbackName;
 }
 
-export function canManageSplitAuthority({ splitState, identity, gameRole }: SplitAuthorityInput): boolean {
+function hasGamemasterAuthority({ splitState, identity, gameRole }: SplitAuthorityInput): boolean {
   if (!identity || gameRole !== "gamemaster") {
     return false;
   }
@@ -48,16 +48,12 @@ export function canManageSplitAuthority({ splitState, identity, gameRole }: Spli
   return splitState.gmIdentity === identity;
 }
 
+export function canManageSplitAuthority(input: SplitAuthorityInput): boolean {
+  return hasGamemasterAuthority(input);
+}
+
 export function canViewSplitAsGamemaster({ splitState, identity, gameRole }: SplitAuthorityInput): boolean {
-  if (!identity || gameRole !== "gamemaster") {
-    return false;
-  }
-
-  if (!splitState.isActive || !splitState.gmIdentity) {
-    return true;
-  }
-
-  return splitState.gmIdentity === identity;
+  return hasGamemasterAuthority({ splitState, identity, gameRole });
 }
 
 export function resolveParticipantGameRole(attributes?: Readonly<Record<string, string>> | null): GameRole | undefined {
@@ -76,7 +72,14 @@ export function shouldAcceptSplitEnvelopeFromSender({
   }
 
   if (envelope.type === "SPLIT_STATE_SNAPSHOT" || envelope.type === "SPLIT_START") {
-    const nextGmIdentity = envelope.payload.splitState.gmIdentity;
+    const splitStatePayload =
+      envelope.payload && typeof envelope.payload === "object" && "splitState" in envelope.payload
+        ? envelope.payload.splitState
+        : undefined;
+    const nextGmIdentity =
+      splitStatePayload && typeof splitStatePayload === "object" && "gmIdentity" in splitStatePayload
+        ? splitStatePayload.gmIdentity
+        : undefined;
     if (senderGameRole !== "gamemaster" || !nextGmIdentity || nextGmIdentity !== senderIdentity) {
       return false;
     }

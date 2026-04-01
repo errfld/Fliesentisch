@@ -31,10 +31,7 @@
         "reference": "https://github.com/nodejs/undici/releases/tag/v7.24.0",
         "note": "Pinned for the current audit cleanup. Undici v7.24.2 is available for reviewer verification or follow-up adoption if acceptable."
       }
-    },
-    "ignoredBuiltDependencies": [
-      "esbuild"
-    ]
+    }
   },
   "devDependencies": {
     "turbo": "^2.8.21"

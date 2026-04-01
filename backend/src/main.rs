@@ -2,12 +2,12 @@ mod users;
 
 use axum::{
     extract::State,
-    http::{HeaderValue, Method, StatusCode},
+    http::{header, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::{Cookie, CookieJar, Expiration, SameSite};
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     trace::TraceLayer,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use users::{build_bootstrap_users, BootstrapUser, StoredUser, UserStore};
 
 const AUTH_SESSION_COOKIE: &str = "vt_session";
@@ -104,8 +104,9 @@ fn cors_layer(frontend_origins: &[String]) -> CorsLayer {
 
     CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers(Any)
+        .allow_headers([header::ACCEPT, header::CONTENT_TYPE])
         .allow_origin(AllowOrigin::list(origins))
+        .allow_credentials(true)
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, ApiError> {
@@ -256,6 +257,9 @@ impl AppConfig {
             .unwrap_or_else(|_| "sqlite:///app/data/auth.db?mode=rwc".to_string());
         let auth_cookie_secret = env::var("AUTH_COOKIE_SECRET")
             .unwrap_or_else(|_| "dev-cookie-secret-change-me".to_string());
+        if auth_cookie_secret == "dev-cookie-secret-change-me" && !is_development_environment() {
+            warn!("AUTH_COOKIE_SECRET not set; using insecure default. Do not use this value outside development.");
+        }
         let auth_session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
             .ok()
             .and_then(|val| val.parse::<u64>().ok())
@@ -443,6 +447,20 @@ fn build_livekit_attributes(user: Option<&StoredUser>) -> Option<HashMap<String,
     Some(attributes)
 }
 
+fn is_development_environment() -> bool {
+    ["APP_ENV", "RUST_ENV"]
+        .into_iter()
+        .find_map(|key| env::var(key).ok())
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(
+                normalized.as_str(),
+                "" | "dev" | "development" | "local" | "test"
+            )
+        })
+        .unwrap_or(true)
+}
+
 impl SessionClaims {
     fn expires_at(&self) -> DateTime<Utc> {
         DateTime::from_timestamp(self.exp, 0).unwrap_or_else(Utc::now)
@@ -552,11 +570,13 @@ fn create_session_token(
 }
 
 fn build_session_cookie(token: String, expires_at: DateTime<Utc>) -> Cookie<'static> {
-    let _ = expires_at;
     Cookie::build((AUTH_SESSION_COOKIE, token))
         .http_only(true)
         .same_site(SameSite::Lax)
         .path("/")
+        .expires(Expiration::DateTime(
+            std::time::SystemTime::from(expires_at).into(),
+        ))
         .build()
 }
 
