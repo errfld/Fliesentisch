@@ -8,6 +8,7 @@ type VideoTileProps = {
   isSpotlighted: boolean;
   isActiveSpeaker: boolean;
   isSelectedForInvite: boolean;
+  mirrorSelfView: boolean;
   onToggleParticipantSelection: (participantIdentity: string) => void;
   onToggleSpotlight: (targetIdentity: string | null) => Promise<void>;
 };
@@ -18,12 +19,16 @@ export function VideoTile({
   isSpotlighted,
   isActiveSpeaker,
   isSelectedForInvite,
+  mirrorSelfView,
   onToggleParticipantSelection,
   onToggleSpotlight
 }: VideoTileProps) {
+  const shouldMirror = tile.isLocal && mirrorSelfView;
+
   return (
     <article
       data-testid={`video-tile-${tile.identity}-${tile.trackSid}`}
+      data-local-mirrored={shouldMirror ? "true" : "false"}
       className={`tile-enter group relative overflow-hidden bg-black ${
         isSpotlighted ? "shadow-[inset_0_0_0_2px_var(--c-gold)]" : ""
       }`}
@@ -33,6 +38,7 @@ export function VideoTile({
         track={tile.track}
         kind="video"
         muted={tile.isLocal}
+        mirrored={shouldMirror}
         className="absolute inset-0 h-full w-full bg-black object-cover"
       />
       <div

@@ -71,6 +71,10 @@ export function shouldAcceptSplitEnvelopeFromSender({
     return true;
   }
 
+  if (envelope.type === "SPLIT_STATE_REQUEST") {
+    return currentState.isActive && Boolean(currentState.gmIdentity);
+  }
+
   if (envelope.type === "SPLIT_STATE_SNAPSHOT" || envelope.type === "SPLIT_START") {
     const splitStatePayload =
       envelope.payload && typeof envelope.payload === "object" && "splitState" in envelope.payload

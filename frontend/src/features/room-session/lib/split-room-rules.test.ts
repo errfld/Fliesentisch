@@ -214,4 +214,40 @@ describe("split-room-rules", () => {
       })
     ).toBe(false);
   });
+
+  it("allows split state requests only while an active GM-owned split exists", () => {
+    const splitState = activeSplitState();
+    const requestEnvelope = createEnvelope("SPLIT_STATE_REQUEST", "bob", {});
+
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: splitState,
+        envelope: requestEnvelope,
+        senderIdentity: "bob",
+        senderGameRole: "player"
+      })
+    ).toBe(true);
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: {
+          ...splitState,
+          gmIdentity: undefined
+        },
+        envelope: requestEnvelope,
+        senderIdentity: "bob",
+        senderGameRole: "player"
+      })
+    ).toBe(false);
+    expect(
+      shouldAcceptSplitEnvelopeFromSender({
+        currentState: {
+          ...splitState,
+          isActive: false
+        },
+        envelope: requestEnvelope,
+        senderIdentity: "bob",
+        senderGameRole: "player"
+      })
+    ).toBe(false);
+  });
 });

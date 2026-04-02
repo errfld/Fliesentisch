@@ -4,8 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { JoinForm } from "@/components/JoinForm";
 import { useAuthSession } from "@/features/auth/hooks/useAuthSession";
 
-const DEFAULT_ROOM = import.meta.env.VITE_DEFAULT_ROOM ?? "dnd-table-1";
-const DEFAULT_JOIN_KEY = import.meta.env.VITE_JOIN_KEY ?? "";
+const DEFAULT_ROOM = import.meta.env.VITE_DEFAULT_ROOM?.trim() || "dnd-table-1";
+const DEFAULT_JOIN_KEY = import.meta.env.VITE_JOIN_KEY?.trim() || "";
 
 export function JoinFormController() {
   const navigate = useNavigate({ from: "/" });

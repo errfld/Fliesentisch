@@ -114,6 +114,7 @@ export function SplitControlPanel({
                         {editingRoomId === room.id ? (
                           <input
                             autoFocus
+                            aria-label={`Rename room ${room.name}`}
                             className="field h-8 px-2 text-xs"
                             onChange={(event) => setDraftRoomName(event.target.value)}
                             value={draftRoomName}

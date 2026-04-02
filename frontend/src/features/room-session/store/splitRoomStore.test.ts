@@ -118,4 +118,43 @@ describe("splitRoomStore", () => {
 
     expect(selectSplitState(next)).toEqual(createInactiveSplitState(12));
   });
+
+  it("ignores assignment updates that target missing rooms", () => {
+    const base = reduceSplitRoomState(
+      createSplitRoomCoreState(),
+      createEnvelope("SPLIT_START", "gm", {
+        splitState: activeSplitState(10)
+      })
+    );
+
+    const next = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_ASSIGNMENT_SET", "gm", {
+        participantIdentity: "bob",
+        roomId: "missing-room",
+        updatedAt: 11
+      })
+    );
+
+    expect(selectSplitState(next).assignments.bob).toBe("side-1");
+  });
+
+  it("ignores GM focus updates that target missing rooms", () => {
+    const base = reduceSplitRoomState(
+      createSplitRoomCoreState(),
+      createEnvelope("SPLIT_START", "gm", {
+        splitState: activeSplitState(10)
+      })
+    );
+
+    const next = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_GM_FOCUS_UPDATE", "gm", {
+        roomId: "missing-room",
+        updatedAt: 11
+      })
+    );
+
+    expect(selectSplitState(next).gmFocusRoomId).toBe("side-1");
+  });
 });

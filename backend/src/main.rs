@@ -136,7 +136,11 @@ async fn mint_token(
         }
     }
 
-    let session_user = resolve_session_user(&state, &jar).await?;
+    let session_user = match resolve_session_user(&state, &jar).await {
+        Ok(user) => user,
+        Err(ApiError::Unauthorized) => None,
+        Err(err) => return Err(err),
+    };
 
     if session_user.is_none() {
         if let Some(join_secret) = &state.config.join_secret {
@@ -209,7 +213,7 @@ async fn login(
 }
 
 async fn logout(jar: CookieJar) -> impl IntoResponse {
-    jar.remove(Cookie::from(AUTH_SESSION_COOKIE))
+    jar.remove(build_session_removal_cookie())
 }
 
 async fn session(
@@ -572,11 +576,21 @@ fn create_session_token(
 fn build_session_cookie(token: String, expires_at: DateTime<Utc>) -> Cookie<'static> {
     Cookie::build((AUTH_SESSION_COOKIE, token))
         .http_only(true)
+        .secure(!is_development_environment())
         .same_site(SameSite::Lax)
         .path("/")
         .expires(Expiration::DateTime(
             std::time::SystemTime::from(expires_at).into(),
         ))
+        .build()
+}
+
+fn build_session_removal_cookie() -> Cookie<'static> {
+    Cookie::build((AUTH_SESSION_COOKIE, ""))
+        .http_only(true)
+        .secure(!is_development_environment())
+        .same_site(SameSite::Lax)
+        .path("/")
         .build()
 }
 
@@ -671,6 +685,61 @@ mod tests {
             .to_str()
             .unwrap();
         assert!(set_cookie.contains("vt_session="));
+        assert!(set_cookie.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_treats_invalid_session_cookie_as_anonymous() {
+        let app = build_router(test_state(Some("shh"), Some("dnd-table-1")).await);
+
+        let payload = serde_json::json!({
+            "room": "dnd-table-1",
+            "identity": "alice",
+            "name": "Alice",
+            "join_key": "shh"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", "vt_session=not-a-valid-jwt")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn logout_clears_root_scoped_session_cookie() {
+        let app = build_router(test_state(None, None).await);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/logout")
+                    .method("POST")
+                    .header("cookie", "vt_session=some-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let set_cookie = response
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("vt_session="));
+        assert!(set_cookie.contains("Path=/"));
     }
 
     #[tokio::test]

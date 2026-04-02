@@ -57,6 +57,10 @@ async function waitForVideoPlayback(page: Page, identity: string): Promise<void>
     .toBe(true);
 }
 
+function localTile(page: Page, identity: string) {
+  return page.locator(`[data-testid^="video-tile-${identity}-"]`).first();
+}
+
 async function clickVideoSelect(page: Page, identity: string): Promise<void> {
   await page.locator(`[data-testid^="video-select-${identity}-"]`).first().click();
 }
@@ -66,6 +70,43 @@ async function whisperCardForMember(page: Page, memberIdentity: string) {
 }
 
 test.describe("whisper multi-client flows", () => {
+  test("toggles mirrored self-view from the device panel and persists it on reload", async ({ browser }) => {
+    const alice = await openParticipant(browser, TEST_ROOM, "Alice");
+
+    try {
+      await ensureCameraOn(alice.page);
+      await waitForVideoPlayback(alice.page, alice.identity);
+
+      const mirrorToggle = alice.page.getByTestId("mirror-self-view-toggle").getByRole("checkbox");
+      const tile = localTile(alice.page, alice.identity);
+      const video = tile.locator("video").first();
+
+      await expect(mirrorToggle).not.toBeChecked();
+      await expect(tile).toHaveAttribute("data-local-mirrored", "false");
+      await expect.poll(() => video.evaluate((node) => (node as HTMLVideoElement).style.transform)).toBe("");
+
+      await mirrorToggle.check();
+
+      await expect(mirrorToggle).toBeChecked();
+      await expect(tile).toHaveAttribute("data-local-mirrored", "true");
+      await expect.poll(() => video.evaluate((node) => (node as HTMLVideoElement).style.transform)).toBe("scaleX(-1)");
+
+      await alice.page.reload();
+      await ensureCameraOn(alice.page);
+      await waitForVideoPlayback(alice.page, alice.identity);
+
+      const reloadedMirrorToggle = alice.page.getByTestId("mirror-self-view-toggle").getByRole("checkbox");
+      const reloadedTile = localTile(alice.page, alice.identity);
+      const reloadedVideo = reloadedTile.locator("video").first();
+
+      await expect(reloadedMirrorToggle).toBeChecked();
+      await expect(reloadedTile).toHaveAttribute("data-local-mirrored", "true");
+      await expect.poll(() => reloadedVideo.evaluate((node) => (node as HTMLVideoElement).style.transform)).toBe("scaleX(-1)");
+    } finally {
+      await alice.context.close();
+    }
+  });
+
   test("renders live local and remote video in both sessions", async ({ browser }) => {
     const alice = await openParticipant(browser, TEST_ROOM, "Alice");
     const bob = await openParticipant(browser, TEST_ROOM, "Bob");

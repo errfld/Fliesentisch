@@ -18,6 +18,9 @@ export function useAuthSession() {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const sessionExpiresAt = session ? Date.parse(session.expires_at) : Number.NaN;
+  const isAuthenticated =
+    session !== null && Number.isFinite(sessionExpiresAt) && sessionExpiresAt > Date.now();
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -47,6 +50,27 @@ export function useAuthSession() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    if (!Number.isFinite(sessionExpiresAt) || sessionExpiresAt <= Date.now()) {
+      setSession(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSession(null);
+      setError(null);
+      setIsLoading(false);
+    }, sessionExpiresAt - Date.now());
+
+    return () => window.clearTimeout(timer);
+  }, [session, sessionExpiresAt]);
 
   const login = useCallback(async (email: string): Promise<LoginResult> => {
     try {
@@ -92,7 +116,7 @@ export function useAuthSession() {
 
   return {
     error,
-    isAuthenticated: Boolean(session),
+    isAuthenticated,
     isLoading,
     login,
     logout,

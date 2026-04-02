@@ -244,6 +244,9 @@ function applyAssignment(
   if (!state.isActive) {
     return { ...state, seenEventIds };
   }
+  if (!state.rooms[payload.roomId]) {
+    return { ...state, seenEventIds };
+  }
 
   const existingUpdatedAt = state.assignmentUpdatedAts[payload.participantIdentity] ?? -1;
   if (payload.updatedAt < existingUpdatedAt) {
@@ -271,6 +274,9 @@ function applyFocusUpdate(
   seenEventIds: Record<string, true>
 ): SplitRoomCoreState {
   if (!state.isActive || payload.updatedAt < state.focusUpdatedAt) {
+    return { ...state, seenEventIds };
+  }
+  if (payload.roomId && !state.rooms[payload.roomId]) {
     return { ...state, seenEventIds };
   }
 

@@ -39,6 +39,7 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
   const [commandError, setCommandError] = useState<string | null>(null);
   const [isPublishingCommand, setIsPublishingCommand] = useState(false);
   const previousRoomIdRef = useRef<string | undefined>(undefined);
+  const hasHydratedActiveSplitRef = useRef(false);
 
   const publishSplitEnvelope = useCallback(
     async (envelope: AnyProtocolEnvelope, applyLocally = true) => {
@@ -192,14 +193,22 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
   useEffect(() => {
     if (!identity) {
       previousRoomIdRef.current = undefined;
+      hasHydratedActiveSplitRef.current = false;
       setNotice(null);
       return;
     }
 
-    const previousRoomId = previousRoomIdRef.current;
-    previousRoomIdRef.current = currentRoomId;
-
     if (!splitState.isActive) {
+      const previousRoomId = previousRoomIdRef.current;
+      previousRoomIdRef.current = undefined;
+      const hadHydratedActiveSplit = hasHydratedActiveSplitRef.current;
+      hasHydratedActiveSplitRef.current = false;
+
+      if (!hadHydratedActiveSplit) {
+        setNotice(null);
+        return;
+      }
+
       if (previousRoomId && previousRoomId !== MAIN_SPLIT_ROOM_ID) {
         setNotice("The table has merged back together.");
         const timer = window.setTimeout(() => setNotice(null), 4000);
@@ -210,11 +219,18 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
       return;
     }
 
-    if (previousRoomId && previousRoomId !== currentRoomId) {
+    const previousRoomId = previousRoomIdRef.current;
+    const isInitialActiveSnapshot = !hasHydratedActiveSplitRef.current;
+    hasHydratedActiveSplitRef.current = true;
+    previousRoomIdRef.current = currentRoomId;
+
+    if (!isInitialActiveSnapshot && previousRoomId && previousRoomId !== currentRoomId) {
       setNotice(`You were moved to ${currentRoomName}.`);
       const timer = window.setTimeout(() => setNotice(null), 4000);
       return () => window.clearTimeout(timer);
     }
+
+    setNotice(null);
   }, [currentRoomId, currentRoomName, identity, splitState.isActive]);
 
   const startSplit = useCallback(async () => {
