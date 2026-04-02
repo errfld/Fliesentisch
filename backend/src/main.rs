@@ -462,7 +462,7 @@ fn is_development_environment() -> bool {
                 "" | "dev" | "development" | "local" | "test"
             )
         })
-        .unwrap_or(true)
+        .unwrap_or(false)
 }
 
 impl SessionClaims {

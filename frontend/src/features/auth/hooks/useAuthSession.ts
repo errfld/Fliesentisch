@@ -25,7 +25,9 @@ export function useAuthSession() {
   const refresh = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/v1/auth/session");
+      const response = await fetch("/api/v1/auth/session", {
+        credentials: "include"
+      });
       if (response.ok) {
         const body = (await response.json()) as AuthSession;
         setSession(body);
@@ -75,6 +77,7 @@ export function useAuthSession() {
   const login = useCallback(async (email: string): Promise<LoginResult> => {
     try {
       const response = await fetch("/api/v1/auth/login", {
+        credentials: "include",
         method: "POST",
         headers: {
           "content-type": "application/json"
@@ -101,7 +104,10 @@ export function useAuthSession() {
 
   const logout = useCallback(async () => {
     try {
-      const response = await fetch("/api/v1/auth/logout", { method: "POST" });
+      const response = await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        credentials: "include"
+      });
       if (!response.ok) {
         setError("Sign-out failed.");
         return;

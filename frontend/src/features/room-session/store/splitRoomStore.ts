@@ -163,6 +163,9 @@ function applyRoomUpsert(
   if (!state.isActive) {
     return { ...state, seenEventIds };
   }
+  if (room.updatedAt <= state.updatedAt) {
+    return { ...state, seenEventIds };
+  }
 
   const removedUpdatedAt = state.removedRoomUpdatedAts[room.id] ?? -1;
   const existing = state.rooms[room.id];
@@ -244,6 +247,9 @@ function applyAssignment(
   if (!state.isActive) {
     return { ...state, seenEventIds };
   }
+  if (payload.updatedAt <= state.updatedAt) {
+    return { ...state, seenEventIds };
+  }
   if (!state.rooms[payload.roomId]) {
     return { ...state, seenEventIds };
   }
@@ -309,19 +315,28 @@ function applyBroadcastUpdate(
 
 export function createSplitRoomCoreState(splitState: SplitState = createInactiveSplitState()): SplitRoomCoreState {
   const normalizedRooms = normalizeRooms(splitState.rooms, splitState.updatedAt);
-  const roomOrder = ensureMainRoomFirst(normalizedRooms.map((room) => room.id), Object.fromEntries(normalizedRooms.map((room) => [room.id, room])));
+  const roomsById = Object.fromEntries(normalizedRooms.map((room) => [room.id, room]));
+  const roomOrder = ensureMainRoomFirst(normalizedRooms.map((room) => room.id), roomsById);
+  const validRoomIds = new Set(roomOrder);
+  const assignments = Object.fromEntries(
+    Object.entries(splitState.assignments).filter(([, roomId]) => validRoomIds.has(roomId))
+  );
+  const gmFocusRoomId =
+    splitState.gmFocusRoomId && validRoomIds.has(splitState.gmFocusRoomId)
+      ? splitState.gmFocusRoomId
+      : undefined;
 
   return {
     isActive: splitState.isActive,
-    rooms: Object.fromEntries(normalizedRooms.map((room) => [room.id, room])),
+    rooms: roomsById,
     roomOrder,
     removedRoomUpdatedAts: {},
-    assignments: { ...splitState.assignments },
+    assignments,
     assignmentUpdatedAts: Object.fromEntries(
-      Object.keys(splitState.assignments).map((participantIdentity) => [participantIdentity, splitState.updatedAt])
+      Object.keys(assignments).map((participantIdentity) => [participantIdentity, splitState.updatedAt])
     ),
     gmIdentity: splitState.gmIdentity,
-    gmFocusRoomId: splitState.gmFocusRoomId,
+    gmFocusRoomId,
     focusUpdatedAt: splitState.updatedAt,
     gmBroadcastActive: splitState.gmBroadcastActive,
     broadcastUpdatedAt: splitState.updatedAt,

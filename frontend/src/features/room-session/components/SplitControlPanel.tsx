@@ -244,7 +244,9 @@ function ParticipantAssignmentRow({
           {participant.isLocal ? <span className="ml-1 text-[var(--c-text-faint)]">(you)</span> : null}
           {participant.identity === splitState.gmIdentity ? <span className="ml-1 text-[var(--c-gold)]">GM</span> : null}
         </span>
-        <span className="shrink-0 text-[var(--c-text-faint)]">{assignedRoomName}</span>
+        {participant.identity !== splitState.gmIdentity ? (
+          <span className="shrink-0 text-[var(--c-text-faint)]">{assignedRoomName}</span>
+        ) : null}
       </div>
 
       {isPinnedToGmRole ? (

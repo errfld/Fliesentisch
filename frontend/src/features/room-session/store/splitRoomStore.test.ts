@@ -60,6 +60,24 @@ describe("splitRoomStore", () => {
     expect(selectSplitState(next).rooms.map((room) => room.id)).toEqual(["main", "side-1"]);
   });
 
+  it("filters invalid assignment and focus references when seeding split state", () => {
+    const seeded = createSplitRoomCoreState({
+      isActive: true,
+      rooms: [{ id: "main", name: "Main Table", kind: "main", updatedAt: 10 }],
+      assignments: {
+        alice: "main",
+        bob: "missing-room"
+      },
+      gmIdentity: "gm",
+      gmFocusRoomId: "missing-room",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    });
+
+    expect(selectSplitState(seeded).assignments).toEqual({ alice: "main" });
+    expect(selectSplitState(seeded).gmFocusRoomId).toBeUndefined();
+  });
+
   it("rejects stale assignment updates", () => {
     const base = reduceSplitRoomState(
       createSplitRoomCoreState(),
@@ -137,6 +155,36 @@ describe("splitRoomStore", () => {
     );
 
     expect(selectSplitState(next).assignments.bob).toBe("side-1");
+  });
+
+  it("ignores stale room and assignment updates after a snapshot", () => {
+    const base = reduceSplitRoomState(
+      createSplitRoomCoreState(),
+      createEnvelope("SPLIT_START", "gm", {
+        splitState: activeSplitState(10)
+      })
+    );
+
+    const roomNext = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_ROOM_UPSERT", "gm", {
+        id: "side-2",
+        name: "Kitchen",
+        kind: "side" as const,
+        updatedAt: 10
+      })
+    );
+    const assignmentNext = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_ASSIGNMENT_SET", "gm", {
+        participantIdentity: "bob",
+        roomId: "main",
+        updatedAt: 10
+      })
+    );
+
+    expect(selectSplitState(roomNext).rooms.map((room) => room.id)).toEqual(["main", "side-1"]);
+    expect(selectSplitState(assignmentNext).assignments.bob).toBe("side-1");
   });
 
   it("ignores GM focus updates that target missing rooms", () => {
