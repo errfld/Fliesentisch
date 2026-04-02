@@ -205,4 +205,39 @@ describe("splitRoomStore", () => {
 
     expect(selectSplitState(next).gmFocusRoomId).toBe("side-1");
   });
+
+  it("ignores equal-timestamp remove, focus, and broadcast updates after a snapshot", () => {
+    const base = reduceSplitRoomState(
+      createSplitRoomCoreState(),
+      createEnvelope("SPLIT_START", "gm", {
+        splitState: activeSplitState(10)
+      })
+    );
+
+    const roomNext = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_ROOM_REMOVE", "gm", {
+        roomId: "side-1",
+        updatedAt: 10
+      })
+    );
+    const focusNext = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_GM_FOCUS_UPDATE", "gm", {
+        roomId: "main",
+        updatedAt: 10
+      })
+    );
+    const broadcastNext = reduceSplitRoomState(
+      base,
+      createEnvelope("SPLIT_GM_BROADCAST_UPDATE", "gm", {
+        active: true,
+        updatedAt: 10
+      })
+    );
+
+    expect(selectSplitState(roomNext).rooms.map((room) => room.id)).toEqual(["main", "side-1"]);
+    expect(selectSplitState(focusNext).gmFocusRoomId).toBe("side-1");
+    expect(selectSplitState(broadcastNext).gmBroadcastActive).toBe(false);
+  });
 });

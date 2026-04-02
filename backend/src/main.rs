@@ -193,6 +193,10 @@ async fn login(
     jar: CookieJar,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    if !state.config.allow_simple_email_login {
+        return Err(ApiError::Unauthorized);
+    }
+
     req.validate()?;
 
     let user = state
@@ -242,6 +246,7 @@ struct AppConfig {
     database_url: String,
     bootstrap_users: Vec<BootstrapUser>,
     auth_cookie_secret: String,
+    allow_simple_email_login: bool,
     auth_session_ttl_seconds: u64,
     livekit_api_key: String,
     livekit_api_secret: String,
@@ -268,6 +273,15 @@ impl AppConfig {
             .ok()
             .and_then(|val| val.parse::<u64>().ok())
             .unwrap_or(60 * 60 * 24 * 7);
+        let allow_simple_email_login = env::var("AUTH_ALLOW_SIMPLE_EMAIL_LOGIN")
+            .ok()
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
         let bootstrap_users = build_bootstrap_users(
             &parse_csv(read_optional("AUTH_BOOTSTRAP_ADMIN_EMAILS")),
             &parse_csv(read_optional("AUTH_BOOTSTRAP_GAMEMASTER_EMAILS")),
@@ -286,6 +300,7 @@ impl AppConfig {
             database_url,
             bootstrap_users,
             auth_cookie_secret,
+            allow_simple_email_login,
             auth_session_ttl_seconds,
             livekit_api_key,
             livekit_api_secret,
@@ -609,6 +624,7 @@ mod tests {
                 database_url: "sqlite::memory:".to_string(),
                 bootstrap_users: vec![],
                 auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
                 auth_session_ttl_seconds: 3600,
                 livekit_api_key: "devkey".to_string(),
                 livekit_api_secret: "devsecret".to_string(),
@@ -654,6 +670,7 @@ mod tests {
                 database_url: "sqlite::memory:".to_string(),
                 bootstrap_users: vec![],
                 auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
                 auth_session_ttl_seconds: 3600,
                 livekit_api_key: "devkey".to_string(),
                 livekit_api_secret: "devsecret".to_string(),
@@ -686,6 +703,49 @@ mod tests {
             .unwrap();
         assert!(set_cookie.contains("vt_session="));
         assert!(set_cookie.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn login_is_rejected_when_simple_email_login_is_disabled() {
+        let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
+        user_store
+            .seed_bootstrap_users(
+                &build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let app = build_router(Arc::new(AppState {
+            config: AppConfig {
+                bind_addr: "127.0.0.1:8787".to_string(),
+                database_url: "sqlite::memory:".to_string(),
+                bootstrap_users: vec![],
+                auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: false,
+                auth_session_ttl_seconds: 3600,
+                livekit_api_key: "devkey".to_string(),
+                livekit_api_secret: "devsecret".to_string(),
+                join_secret: Some("shh".to_string()),
+                allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
+                token_ttl_seconds: 3600,
+                frontend_origins: vec!["http://localhost:3000".to_string()],
+            },
+            user_store,
+        }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/login")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"gm@example.com"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -758,6 +818,7 @@ mod tests {
                 database_url: "sqlite::memory:".to_string(),
                 bootstrap_users: vec![],
                 auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
                 auth_session_ttl_seconds: 3600,
                 livekit_api_key: "devkey".to_string(),
                 livekit_api_secret: "devsecret".to_string(),

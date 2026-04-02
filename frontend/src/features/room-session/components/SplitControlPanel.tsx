@@ -100,7 +100,9 @@ export function SplitControlPanel({
             <div className="mt-4 space-y-2">
               {splitState.rooms.map((room) => {
                 const roomParticipantCount = participants.filter(
-                  (participant) => resolveParticipantRoomId(splitState, participant.identity) === room.id
+                  (participant) =>
+                    participant.identity !== splitState.gmIdentity &&
+                    resolveParticipantRoomId(splitState, participant.identity) === room.id
                 ).length;
                 const isFocused = splitState.gmFocusRoomId === room.id;
 

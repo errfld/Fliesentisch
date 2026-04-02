@@ -200,7 +200,7 @@ function applyRoomRemove(
 
   const existing = state.rooms[payload.roomId];
   const removedUpdatedAt = state.removedRoomUpdatedAts[payload.roomId] ?? -1;
-  if (payload.updatedAt <= removedUpdatedAt || payload.updatedAt < (existing?.updatedAt ?? -1)) {
+  if (payload.updatedAt <= removedUpdatedAt || payload.updatedAt <= (existing?.updatedAt ?? -1)) {
     return { ...state, seenEventIds };
   }
 
@@ -279,7 +279,7 @@ function applyFocusUpdate(
   payload: SplitGmFocusPayload,
   seenEventIds: Record<string, true>
 ): SplitRoomCoreState {
-  if (!state.isActive || payload.updatedAt < state.focusUpdatedAt) {
+  if (!state.isActive || payload.updatedAt <= state.focusUpdatedAt) {
     return { ...state, seenEventIds };
   }
   if (payload.roomId && !state.rooms[payload.roomId]) {
@@ -300,7 +300,7 @@ function applyBroadcastUpdate(
   payload: SplitGmBroadcastPayload,
   seenEventIds: Record<string, true>
 ): SplitRoomCoreState {
-  if (!state.isActive || payload.updatedAt < state.broadcastUpdatedAt) {
+  if (!state.isActive || payload.updatedAt <= state.broadcastUpdatedAt) {
     return { ...state, seenEventIds };
   }
 
