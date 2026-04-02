@@ -63,7 +63,7 @@ export function useAuthSession() {
       }
 
       setError(AUTH_UNAVAILABLE_MESSAGE);
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted || !isCurrentRequest(requestId)) {
         return;
       }
