@@ -1,6 +1,8 @@
 import type { Track } from "livekit-client";
 import type { Whisper } from "@/lib/protocol";
 
+export type GameRole = "gamemaster" | "player";
+
 export type VideoTileModel = {
   key: string;
   identity: string;
@@ -11,6 +13,7 @@ export type VideoTileModel = {
 
 export type AudioTrackModel = {
   key: string;
+  identity: string;
   track: Track;
   isMain: boolean;
 };

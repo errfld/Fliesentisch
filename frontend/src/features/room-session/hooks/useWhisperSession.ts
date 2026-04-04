@@ -8,7 +8,8 @@ import {
   createEnvelope,
   parseProtocolEnvelope
 } from "@/lib/protocol";
-import type { AnyProtocolEnvelope, SpotlightPayload, Whisper, WhisperClosePayload } from "@/lib/protocol";
+import type { AnyProtocolEnvelope, SpotlightPayload, SplitState, Whisper, WhisperClosePayload } from "@/lib/protocol";
+import { canUseWhisperMembersInSplit, filterWhispersForSplitView } from "@/features/room-session/lib/split-room-rules";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 import { collectReassignmentMutations } from "@/lib/whisper-membership";
 import { useWhisperStore } from "@/store/whisperStore";
@@ -17,6 +18,8 @@ type UseWhisperSessionInput = {
   room: Room | null;
   identity: string;
   renderVersion: number;
+  splitState: SplitState;
+  viewerIsGamemaster: boolean;
   startWhisperPtt: (whisperId: string) => Promise<void>;
   stopWhisperPtt: () => Promise<void>;
   clearWhisperTrack: () => Promise<void>;
@@ -26,6 +29,8 @@ export function useWhisperSession({
   room,
   identity,
   renderVersion,
+  splitState,
+  viewerIsGamemaster,
   startWhisperPtt,
   stopWhisperPtt,
   clearWhisperTrack
@@ -43,16 +48,28 @@ export function useWhisperSession({
   const setFollowSpotlight = useWhisperStore((state) => state.setFollowSpotlight);
   const applyEnvelope = useWhisperStore((state) => state.applyEnvelope);
 
-  const selectedWhisper = selectedWhisperId ? whispers[selectedWhisperId] : undefined;
-  const isSelectedMember = Boolean(selectedWhisper && selectedWhisper.members.includes(identity));
   const selectedParticipants = useMemo(
     () => Array.from(selectedParticipantIds).sort((a, b) => a.localeCompare(b)),
     [selectedParticipantIds]
   );
-  const activeWhispers = useMemo(
+  const whisperList = useMemo(
     () => Object.values(whispers).sort((a, b) => b.updatedAt - a.updatedAt),
     [whispers]
   );
+  const activeWhispers = useMemo(
+    () =>
+      filterWhispersForSplitView(whisperList, {
+        splitState,
+        viewerIdentity: identity,
+        viewerIsGamemaster
+      }),
+    [identity, splitState, viewerIsGamemaster, whisperList]
+  );
+  const selectedWhisper = useMemo(
+    () => activeWhispers.find((whisper) => whisper.id === selectedWhisperId),
+    [activeWhispers, selectedWhisperId]
+  );
+  const isSelectedMember = Boolean(selectedWhisper && selectedWhisper.members.includes(identity));
 
   useEffect(() => {
     if (identity) {
@@ -151,15 +168,23 @@ export function useWhisperSession({
 
         if (trackName.startsWith("whisper:")) {
           const whisperId = trackName.slice("whisper:".length);
-          const isMember = whispers[whisperId]?.members.includes(identity) ?? false;
-          publication.setSubscribed(isMember);
+          const whisper = whispers[whisperId];
+          const isMember = whisper?.members.includes(identity) ?? false;
+          const isVisible = whisper
+            ? filterWhispersForSplitView([whisper], {
+                splitState,
+                viewerIdentity: identity,
+                viewerIsGamemaster
+              }).length > 0
+            : false;
+          publication.setSubscribed(isMember && isVisible);
           return;
         }
 
         publication.setSubscribed(true);
       });
     });
-  }, [identity, room, whispers]);
+  }, [identity, room, splitState, viewerIsGamemaster, whispers]);
 
   useEffect(() => {
     applySelectiveSubscriptions();
@@ -172,6 +197,12 @@ export function useWhisperSession({
 
     void clearWhisperTrack();
   }, [clearWhisperTrack, room, selectedWhisperId]);
+
+  useEffect(() => {
+    if (selectedWhisperId && !selectedWhisper) {
+      setSelectedWhisperId(undefined);
+    }
+  }, [selectedWhisper, selectedWhisperId, setSelectedWhisperId]);
 
   const toggleParticipantSelection = useCallback(
     (participantIdentity: string) => {
@@ -222,6 +253,10 @@ export function useWhisperSession({
     const id = createUuid();
     const now = Date.now();
     const members = Array.from(new Set([identity, ...selectedParticipants]));
+    if (!canUseWhisperMembersInSplit(splitState, members, identity)) {
+      setWhisperNotice("Whispers can only include participants from one split room.");
+      return;
+    }
     const reassignmentMutations = collectReassignmentMutations(whispers, id, members, now);
     const projectedWhisperCount =
       Object.keys(whispers).length -
@@ -251,7 +286,7 @@ export function useWhisperSession({
     setSelectedWhisperId(id);
     setSelectedParticipantIds(new Set());
     setWhisperNotice(null);
-  }, [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants, setSelectedWhisperId, whispers]);
+  }, [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants, setSelectedWhisperId, splitState, whispers]);
 
   const joinWhisper = useCallback(
     async (whisper: Whisper) => {
@@ -260,13 +295,17 @@ export function useWhisperSession({
       }
 
       const now = Date.now();
-      await publishReassignmentMutations(whisper.id, [identity], now);
-
       const updated: Whisper = {
         ...whisper,
         members: Array.from(new Set([...whisper.members, identity])),
         updatedAt: now
       };
+      if (!canUseWhisperMembersInSplit(splitState, updated.members, identity)) {
+        setWhisperNotice("You can only join whispers within one split room.");
+        return;
+      }
+
+      await publishReassignmentMutations(whisper.id, [identity], now);
 
       const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!didPublish) {
@@ -277,7 +316,7 @@ export function useWhisperSession({
       setSelectedWhisperId(whisper.id);
       setWhisperNotice(null);
     },
-    [identity, publishEnvelope, publishReassignmentMutations, setSelectedWhisperId]
+    [identity, publishEnvelope, publishReassignmentMutations, setSelectedWhisperId, splitState]
   );
 
   const addSelectedParticipantsToWhisper = useCallback(
@@ -293,13 +332,17 @@ export function useWhisperSession({
       }
 
       const now = Date.now();
-      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
-
       const updated: Whisper = {
         ...whisper,
         members: Array.from(new Set([...whisper.members, ...participantsToAdd])),
         updatedAt: now
       };
+      if (!canUseWhisperMembersInSplit(splitState, updated.members, identity)) {
+        setWhisperNotice("Whispers can only include participants from one split room.");
+        return;
+      }
+
+      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
 
       const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!didPublish) {
@@ -310,7 +353,7 @@ export function useWhisperSession({
       setSelectedParticipantIds(new Set());
       setWhisperNotice(null);
     },
-    [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants]
+    [identity, publishEnvelope, publishReassignmentMutations, selectedParticipants, splitState]
   );
 
   const leaveWhisper = useCallback(

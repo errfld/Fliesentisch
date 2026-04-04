@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { JoinForm } from "@/components/JoinForm";
+import { JoinFormController } from "@/features/auth/components/JoinFormController";
 
 export const Route = createFileRoute("/")({
   component: HomePage
@@ -56,7 +56,7 @@ function HomePage() {
         </section>
 
         {/* Right — join form */}
-        <JoinForm />
+        <JoinFormController />
       </div>
     </main>
   );

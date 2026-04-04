@@ -7,6 +7,8 @@ type RoomTopBarProps = RoomSessionControls & {
   identity: string;
   participantCount: number;
   activeWhisperCount: number;
+  currentRoomName?: string;
+  splitActive: boolean;
   spotlightIdentity?: string;
 };
 
@@ -16,6 +18,8 @@ export function RoomTopBar({
   identity,
   participantCount,
   activeWhisperCount,
+  currentRoomName,
+  splitActive,
   spotlightIdentity,
   micEnabled,
   cameraEnabled,
@@ -37,6 +41,12 @@ export function RoomTopBar({
         </p>
         <nav className="hidden items-center gap-4 text-[11px] text-[var(--c-text-dim)] sm:flex">
           <span>{participantCount} at table</span>
+          {splitActive && currentRoomName ? (
+            <>
+              <span className="text-[var(--c-text-faint)]">/</span>
+              <span className="text-[var(--c-gold)]">Split: {currentRoomName}</span>
+            </>
+          ) : null}
           <span className="text-[var(--c-text-faint)]">/</span>
           <span>
             {activeWhisperCount} whisper{activeWhisperCount === 1 ? "" : "s"}

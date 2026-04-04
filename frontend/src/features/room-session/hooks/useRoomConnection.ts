@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DisconnectReason, Room, RoomEvent } from "livekit-client";
 import { getOrCreateClientId, toIdentity } from "@/lib/client-id";
+import type { GameRole } from "@/features/room-session/types";
 import {
   areSetsEqual,
   formatConnectionError,
@@ -25,6 +26,7 @@ const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
 
 export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomConnectionInput) {
   const [clientId, setClientId] = useState("");
+  const [gameRole, setGameRole] = useState<GameRole | undefined>(undefined);
   const [token, setToken] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
@@ -50,6 +52,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
     }
 
     const controller = new AbortController();
+    setGameRole(undefined);
     setToken("");
     setIsConnecting(true);
     setError(null);
@@ -75,6 +78,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
           throw new Error(`${code}: ${message}`);
         }
 
+        setGameRole(normalizeGameRole(body?.game_role));
         setToken(body.token);
       } catch (err) {
         if (controller.signal.aborted) {
@@ -190,9 +194,14 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
     activeSpeakers,
     disconnect: () => room?.disconnect(),
     error,
+    gameRole,
     identity,
     isConnecting,
     renderVersion,
     room
   };
+}
+
+function normalizeGameRole(value: unknown): GameRole | undefined {
+  return value === "gamemaster" || value === "player" ? value : undefined;
 }

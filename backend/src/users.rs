@@ -98,6 +98,30 @@ impl UserStore {
         Ok(row.get("count"))
     }
 
+    pub async fn find_active_user_by_email(
+        &self,
+        email: &str,
+    ) -> Result<Option<StoredUser>, StoreError> {
+        let normalized_email = normalize_email(email);
+        if normalized_email.is_empty() {
+            return Ok(None);
+        }
+
+        let row = sqlx::query(
+            r#"
+            SELECT email, normalized_email, platform_role, game_role, is_active
+            FROM users
+            WHERE normalized_email = ? AND is_active = 1
+            LIMIT 1
+            "#,
+        )
+        .bind(normalized_email)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(stored_user_from_row).transpose()
+    }
+
     #[cfg(test)]
     pub async fn list_users(&self) -> Result<Vec<StoredUser>, StoreError> {
         let rows = sqlx::query(
@@ -110,17 +134,7 @@ impl UserStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
-                Ok(StoredUser {
-                    email: row.get("email"),
-                    normalized_email: row.get("normalized_email"),
-                    platform_role: PlatformRole::from_db_value(row.get("platform_role"))?,
-                    game_role: GameRole::from_db_value(row.get("game_role"))?,
-                    is_active: row.get::<i64, _>("is_active") != 0,
-                })
-            })
-            .collect()
+        rows.into_iter().map(stored_user_from_row).collect()
     }
 }
 
@@ -146,7 +160,6 @@ impl PlatformRole {
         }
     }
 
-    #[cfg(test)]
     fn from_db_value(value: String) -> Result<Self, StoreError> {
         match value.as_str() {
             "admin" => Ok(Self::Admin),
@@ -170,7 +183,6 @@ impl GameRole {
         }
     }
 
-    #[cfg(test)]
     fn from_db_value(value: String) -> Result<Self, StoreError> {
         match value.as_str() {
             "gamemaster" => Ok(Self::Gamemaster),
@@ -180,7 +192,6 @@ impl GameRole {
     }
 }
 
-#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredUser {
     pub email: String,
@@ -194,7 +205,6 @@ pub struct StoredUser {
 pub enum StoreError {
     #[error("bootstrap user is both gamemaster and player: {0}")]
     ConflictingGameRole(String),
-    #[cfg(test)]
     #[error("invalid role value in database: {0}")]
     InvalidRoleValue(String),
     #[error("database error: {0}")]
@@ -292,6 +302,16 @@ fn normalize_email(email: &str) -> String {
     email.trim().to_lowercase()
 }
 
+fn stored_user_from_row(row: sqlx::sqlite::SqliteRow) -> Result<StoredUser, StoreError> {
+    Ok(StoredUser {
+        email: row.get("email"),
+        normalized_email: row.get("normalized_email"),
+        platform_role: PlatformRole::from_db_value(row.get("platform_role"))?,
+        game_role: GameRole::from_db_value(row.get("game_role"))?,
+        is_active: row.get::<i64, _>("is_active") != 0,
+    })
+}
+
 async fn ensure_sqlite_parent_dir(database_url: &str) -> Result<(), StoreError> {
     let Some(path) = sqlite_file_path(database_url) else {
         return Ok(());
@@ -356,5 +376,21 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(err, StoreError::ConflictingGameRole(_)));
+    }
+
+    #[tokio::test]
+    async fn finds_active_user_by_email_case_insensitively() {
+        let store = UserStore::connect("sqlite::memory:").await.unwrap();
+        let users = build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap();
+        store.seed_bootstrap_users(&users).await.unwrap();
+
+        let user = store
+            .find_active_user_by_email("  GM@EXAMPLE.COM ")
+            .await
+            .unwrap()
+            .expect("user");
+
+        assert_eq!(user.normalized_email, "gm@example.com");
+        assert_eq!(user.game_role, GameRole::Gamemaster);
     }
 }

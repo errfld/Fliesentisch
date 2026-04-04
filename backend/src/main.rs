@@ -2,22 +2,30 @@ mod users;
 
 use axum::{
     extract::State,
-    http::{HeaderValue, Method, StatusCode},
+    http::{header, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use axum_extra::extract::cookie::{Cookie, CookieJar, Expiration, SameSite};
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, env, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    net::SocketAddr,
+    sync::Arc,
+};
 use thiserror::Error;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     trace::TraceLayer,
 };
-use tracing::{error, info};
-use users::{build_bootstrap_users, BootstrapUser, UserStore};
+use tracing::{error, info, warn};
+use users::{build_bootstrap_users, BootstrapUser, StoredUser, UserStore};
+
+const AUTH_SESSION_COOKIE: &str = "vt_session";
 
 #[tokio::main]
 async fn main() {
@@ -72,6 +80,9 @@ async fn main() {
 fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
+        .route("/api/v1/auth/login", post(login))
+        .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/auth/session", get(session))
         .route("/api/v1/token", post(mint_token))
         .layer(TraceLayer::new_for_http())
         .layer(cors_layer(&state.config.frontend_origins))
@@ -93,8 +104,9 @@ fn cors_layer(frontend_origins: &[String]) -> CorsLayer {
 
     CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers(Any)
+        .allow_headers([header::ACCEPT, header::CONTENT_TYPE])
         .allow_origin(AllowOrigin::list(origins))
+        .allow_credentials(true)
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, ApiError> {
@@ -113,15 +125,10 @@ async fn health(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse,
 
 async fn mint_token(
     State(state): State<Arc<AppState>>,
+    jar: CookieJar,
     Json(req): Json<TokenRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     req.validate()?;
-
-    if let Some(join_secret) = &state.config.join_secret {
-        if req.join_key.as_deref() != Some(join_secret) {
-            return Err(ApiError::InvalidJoinKey);
-        }
-    }
 
     if let Some(allowed_rooms) = &state.config.allowed_rooms {
         if !allowed_rooms.contains(&req.room) {
@@ -129,13 +136,31 @@ async fn mint_token(
         }
     }
 
+    let session_user = match resolve_session_user(&state, &jar).await {
+        Ok(user) => user,
+        Err(ApiError::Unauthorized) => None,
+        Err(err) => return Err(err),
+    };
+
+    if session_user.is_none() {
+        if let Some(join_secret) = &state.config.join_secret {
+            if req.join_key.as_deref() != Some(join_secret) {
+                return Err(ApiError::InvalidJoinKey);
+            }
+        }
+    }
+
     let now = Utc::now();
     let expiry = now + Duration::seconds(state.config.token_ttl_seconds as i64);
+    let game_role = session_user
+        .as_ref()
+        .map(|user| user.game_role.as_str().to_string());
 
     let claims = LiveKitClaims {
         iss: state.config.livekit_api_key.clone(),
         sub: req.identity.clone(),
         name: req.name.clone(),
+        attributes: build_livekit_attributes(session_user.as_ref()),
         nbf: now.timestamp(),
         exp: expiry.timestamp(),
         video: LiveKitVideoGrant {
@@ -156,10 +181,57 @@ async fn mint_token(
     Ok((
         StatusCode::OK,
         Json(TokenResponse {
+            game_role,
             token,
             expires_at: expiry,
         }),
     ))
+}
+
+async fn login(
+    State(state): State<Arc<AppState>>,
+    jar: CookieJar,
+    Json(req): Json<LoginRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    if !state.config.allow_simple_email_login {
+        return Err(ApiError::Unauthorized);
+    }
+
+    req.validate()?;
+
+    let user = state
+        .user_store
+        .find_active_user_by_email(&req.email)
+        .await
+        .map_err(|_| ApiError::Internal)?
+        .ok_or(ApiError::Unauthorized)?;
+
+    let expires_at = Utc::now() + Duration::seconds(state.config.auth_session_ttl_seconds as i64);
+    let session_token = create_session_token(&state.config, &user, expires_at)?;
+    let cookie = build_session_cookie(session_token, expires_at);
+
+    Ok((
+        jar.add(cookie),
+        Json(AuthSessionResponse::from_user(user, expires_at)),
+    ))
+}
+
+async fn logout(jar: CookieJar) -> impl IntoResponse {
+    jar.remove(build_session_removal_cookie())
+}
+
+async fn session(
+    State(state): State<Arc<AppState>>,
+    jar: CookieJar,
+) -> Result<impl IntoResponse, ApiError> {
+    let user = resolve_session_user(&state, &jar)
+        .await?
+        .ok_or(ApiError::Unauthorized)?;
+    let expires_at = read_session_claims(&state.config, &jar)?
+        .map(|claims| claims.expires_at())
+        .ok_or(ApiError::Unauthorized)?;
+
+    Ok(Json(AuthSessionResponse::from_user(user, expires_at)))
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +245,9 @@ struct AppConfig {
     bind_addr: String,
     database_url: String,
     bootstrap_users: Vec<BootstrapUser>,
+    auth_cookie_secret: String,
+    allow_simple_email_login: bool,
+    auth_session_ttl_seconds: u64,
     livekit_api_key: String,
     livekit_api_secret: String,
     join_secret: Option<String>,
@@ -189,6 +264,24 @@ impl AppConfig {
         let bind_addr = env::var("AUTH_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8787".to_string());
         let database_url = env::var("AUTH_DATABASE_URL")
             .unwrap_or_else(|_| "sqlite:///app/data/auth.db?mode=rwc".to_string());
+        let auth_cookie_secret = env::var("AUTH_COOKIE_SECRET")
+            .unwrap_or_else(|_| "dev-cookie-secret-change-me".to_string());
+        if auth_cookie_secret == "dev-cookie-secret-change-me" && !is_development_environment() {
+            warn!("AUTH_COOKIE_SECRET not set; using insecure default. Do not use this value outside development.");
+        }
+        let auth_session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
+            .ok()
+            .and_then(|val| val.parse::<u64>().ok())
+            .unwrap_or(60 * 60 * 24 * 7);
+        let allow_simple_email_login = env::var("AUTH_ALLOW_SIMPLE_EMAIL_LOGIN")
+            .ok()
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
         let bootstrap_users = build_bootstrap_users(
             &parse_csv(read_optional("AUTH_BOOTSTRAP_ADMIN_EMAILS")),
             &parse_csv(read_optional("AUTH_BOOTSTRAP_GAMEMASTER_EMAILS")),
@@ -206,6 +299,9 @@ impl AppConfig {
             bind_addr,
             database_url,
             bootstrap_users,
+            auth_cookie_secret,
+            allow_simple_email_login,
+            auth_session_ttl_seconds,
             livekit_api_key,
             livekit_api_secret,
             join_secret,
@@ -288,10 +384,29 @@ impl TokenRequest {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    email: String,
+}
+
+impl LoginRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        if self.email.trim().is_empty() {
+            return Err(ApiError::BadRequest(
+                "`email` must not be empty".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct TokenResponse {
     token: String,
     expires_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    game_role: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -299,6 +414,8 @@ struct LiveKitClaims {
     iss: String,
     sub: String,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    attributes: Option<HashMap<String, String>>,
     nbf: i64,
     exp: i64,
     video: LiveKitVideoGrant,
@@ -315,10 +432,66 @@ struct LiveKitVideoGrant {
     can_subscribe: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct AuthSessionResponse {
+    email: String,
+    game_role: String,
+    platform_role: String,
+    expires_at: DateTime<Utc>,
+}
+
+impl AuthSessionResponse {
+    fn from_user(user: StoredUser, expires_at: DateTime<Utc>) -> Self {
+        Self {
+            email: user.email,
+            game_role: user.game_role.as_str().to_string(),
+            platform_role: user.platform_role.as_str().to_string(),
+            expires_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SessionClaims {
+    sub: String,
+    email: String,
+    nbf: i64,
+    exp: i64,
+}
+
+fn build_livekit_attributes(user: Option<&StoredUser>) -> Option<HashMap<String, String>> {
+    let user = user?;
+    let mut attributes = HashMap::new();
+    attributes.insert("game_role".to_string(), user.game_role.as_str().to_string());
+    Some(attributes)
+}
+
+fn is_development_environment() -> bool {
+    ["APP_ENV", "RUST_ENV"]
+        .into_iter()
+        .find_map(|key| env::var(key).ok())
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(
+                normalized.as_str(),
+                "" | "dev" | "development" | "local" | "test"
+            )
+        })
+        .unwrap_or(false)
+}
+
+impl SessionClaims {
+    fn expires_at(&self) -> DateTime<Utc> {
+        DateTime::from_timestamp(self.exp, 0).unwrap_or_else(Utc::now)
+    }
+}
+
 #[derive(Debug, Error)]
 enum ApiError {
     #[error("invalid join key")]
     InvalidJoinKey,
+    #[error("unauthorized")]
+    Unauthorized,
     #[error("room is not allowed: {0}")]
     RoomNotAllowed(String),
     #[error("bad request: {0}")]
@@ -335,6 +508,7 @@ impl IntoResponse for ApiError {
                 "INVALID_JOIN_KEY",
                 self.to_string(),
             ),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", self.to_string()),
             ApiError::RoomNotAllowed(_) => {
                 (StatusCode::FORBIDDEN, "ROOM_NOT_ALLOWED", self.to_string())
             }
@@ -359,6 +533,82 @@ impl IntoResponse for ApiError {
     }
 }
 
+async fn resolve_session_user(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<Option<StoredUser>, ApiError> {
+    let Some(claims) = read_session_claims(&state.config, jar)? else {
+        return Ok(None);
+    };
+
+    let user = state
+        .user_store
+        .find_active_user_by_email(&claims.email)
+        .await
+        .map_err(|_| ApiError::Internal)?;
+
+    Ok(user)
+}
+
+fn read_session_claims(
+    config: &AppConfig,
+    jar: &CookieJar,
+) -> Result<Option<SessionClaims>, ApiError> {
+    let Some(cookie) = jar.get(AUTH_SESSION_COOKIE) else {
+        return Ok(None);
+    };
+
+    let decoded = decode::<SessionClaims>(
+        cookie.value(),
+        &DecodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
+        &Validation::new(Algorithm::HS256),
+    )
+    .map_err(|_| ApiError::Unauthorized)?;
+
+    Ok(Some(decoded.claims))
+}
+
+fn create_session_token(
+    config: &AppConfig,
+    user: &StoredUser,
+    expires_at: DateTime<Utc>,
+) -> Result<String, ApiError> {
+    let claims = SessionClaims {
+        sub: user.normalized_email.clone(),
+        email: user.normalized_email.clone(),
+        nbf: Utc::now().timestamp(),
+        exp: expires_at.timestamp(),
+    };
+
+    encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(config.auth_cookie_secret.as_bytes()),
+    )
+    .map_err(|_| ApiError::Internal)
+}
+
+fn build_session_cookie(token: String, expires_at: DateTime<Utc>) -> Cookie<'static> {
+    Cookie::build((AUTH_SESSION_COOKIE, token))
+        .http_only(true)
+        .secure(!is_development_environment())
+        .same_site(SameSite::Lax)
+        .path("/")
+        .expires(Expiration::DateTime(
+            std::time::SystemTime::from(expires_at).into(),
+        ))
+        .build()
+}
+
+fn build_session_removal_cookie() -> Cookie<'static> {
+    Cookie::build((AUTH_SESSION_COOKIE, ""))
+        .http_only(true)
+        .secure(!is_development_environment())
+        .same_site(SameSite::Lax)
+        .path("/")
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,6 +623,9 @@ mod tests {
                 bind_addr: "127.0.0.1:8787".to_string(),
                 database_url: "sqlite::memory:".to_string(),
                 bootstrap_users: vec![],
+                auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
+                auth_session_ttl_seconds: 3600,
                 livekit_api_key: "devkey".to_string(),
                 livekit_api_secret: "devsecret".to_string(),
                 join_secret: join_secret.map(ToOwned::to_owned),
@@ -399,6 +652,249 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn login_sets_session_cookie_for_bootstrap_user() {
+        let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
+        user_store
+            .seed_bootstrap_users(
+                &build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let app = build_router(Arc::new(AppState {
+            config: AppConfig {
+                bind_addr: "127.0.0.1:8787".to_string(),
+                database_url: "sqlite::memory:".to_string(),
+                bootstrap_users: vec![],
+                auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
+                auth_session_ttl_seconds: 3600,
+                livekit_api_key: "devkey".to_string(),
+                livekit_api_secret: "devsecret".to_string(),
+                join_secret: Some("shh".to_string()),
+                allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
+                token_ttl_seconds: 3600,
+                frontend_origins: vec!["http://localhost:3000".to_string()],
+            },
+            user_store,
+        }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/login")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"gm@example.com"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let set_cookie = response
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("vt_session="));
+        assert!(set_cookie.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn login_is_rejected_when_simple_email_login_is_disabled() {
+        let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
+        user_store
+            .seed_bootstrap_users(
+                &build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let app = build_router(Arc::new(AppState {
+            config: AppConfig {
+                bind_addr: "127.0.0.1:8787".to_string(),
+                database_url: "sqlite::memory:".to_string(),
+                bootstrap_users: vec![],
+                auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: false,
+                auth_session_ttl_seconds: 3600,
+                livekit_api_key: "devkey".to_string(),
+                livekit_api_secret: "devsecret".to_string(),
+                join_secret: Some("shh".to_string()),
+                allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
+                token_ttl_seconds: 3600,
+                frontend_origins: vec!["http://localhost:3000".to_string()],
+            },
+            user_store,
+        }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/login")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"gm@example.com"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_treats_invalid_session_cookie_as_anonymous() {
+        let app = build_router(test_state(Some("shh"), Some("dnd-table-1")).await);
+
+        let payload = serde_json::json!({
+            "room": "dnd-table-1",
+            "identity": "alice",
+            "name": "Alice",
+            "join_key": "shh"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", "vt_session=not-a-valid-jwt")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn logout_clears_root_scoped_session_cookie() {
+        let app = build_router(test_state(None, None).await);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/logout")
+                    .method("POST")
+                    .header("cookie", "vt_session=some-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let set_cookie = response
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("vt_session="));
+        assert!(set_cookie.contains("Path=/"));
+    }
+
+    #[tokio::test]
+    async fn token_endpoint_returns_role_for_authenticated_session() {
+        let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
+        user_store
+            .seed_bootstrap_users(
+                &build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let state = Arc::new(AppState {
+            config: AppConfig {
+                bind_addr: "127.0.0.1:8787".to_string(),
+                database_url: "sqlite::memory:".to_string(),
+                bootstrap_users: vec![],
+                auth_cookie_secret: "dev-cookie-secret-change-me".to_string(),
+                allow_simple_email_login: true,
+                auth_session_ttl_seconds: 3600,
+                livekit_api_key: "devkey".to_string(),
+                livekit_api_secret: "devsecret".to_string(),
+                join_secret: Some("shh".to_string()),
+                allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
+                token_ttl_seconds: 3600,
+                frontend_origins: vec!["http://localhost:3000".to_string()],
+            },
+            user_store,
+        });
+        let app = build_router(state.clone());
+
+        let login_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/login")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"email":"gm@example.com"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let set_cookie = login_response
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+
+        let payload = serde_json::json!({
+            "room": "dnd-table-1",
+            "identity": "alice",
+            "name": "Alice"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", set_cookie)
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let parsed: TokenResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed.game_role.as_deref(), Some("gamemaster"));
+
+        let decoded = decode::<LiveKitClaims>(
+            &parsed.token,
+            &DecodingKey::from_secret("devsecret".as_bytes()),
+            &Validation::new(Algorithm::HS256),
+        )
+        .unwrap();
+        assert_eq!(
+            decoded
+                .claims
+                .attributes
+                .as_ref()
+                .and_then(|attributes| attributes.get("game_role"))
+                .map(String::as_str),
+            Some("gamemaster")
+        );
     }
 
     #[tokio::test]
@@ -438,6 +934,7 @@ mod tests {
         .unwrap();
         assert_eq!(decoded.claims.video.room, "dnd-table-1");
         assert!(decoded.claims.video.room_join);
+        assert!(decoded.claims.attributes.is_none());
     }
 
     #[tokio::test]
