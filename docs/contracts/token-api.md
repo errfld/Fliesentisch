@@ -4,23 +4,29 @@
 
 `POST /api/v1/token`
 
+Requires an authenticated backend session cookie created by the Google OAuth flow.
+
 ## Request
 
 ```json
 {
   "room": "dnd-table-1",
-  "identity": "alice",
-  "name": "Alice",
-  "join_key": "optional"
+  "name": "Alice"
 }
 ```
+
+Notes:
+
+- `identity` is derived server-side from the authenticated Google user.
+- `join_key` is no longer accepted.
 
 ## Response (200)
 
 ```json
 {
   "token": "jwt",
-  "expires_at": "2026-03-02T22:00:00Z"
+  "expires_at": "2026-03-02T22:00:00Z",
+  "identity": "google-subject"
 }
 ```
 
@@ -29,7 +35,7 @@
 ```json
 {
   "error": {
-    "code": "INVALID_JOIN_KEY | ROOM_NOT_ALLOWED | BAD_REQUEST | INTERNAL",
+    "code": "UNAUTHENTICATED | ROOM_NOT_ALLOWED | FORBIDDEN | BAD_REQUEST | INTERNAL",
     "message": "human readable"
   }
 }
@@ -39,6 +45,6 @@
 
 - `200` token issued
 - `400` malformed request
-- `401` invalid join key
+- `401` missing or invalid backend session
 - `403` room not allowed
 - `500` unexpected failure

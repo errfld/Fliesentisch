@@ -22,13 +22,12 @@ import {
 type RoomSessionProps = {
   roomName: string;
   displayName: string;
-  joinKey?: string;
 };
 
-export function RoomSession({ roomName, displayName, joinKey }: RoomSessionProps) {
+export function RoomSession({ roomName, displayName }: RoomSessionProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const connection = useRoomConnection({ roomName, displayName, joinKey });
+  const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
   const whisperSession = useWhisperSession({
     room: connection.room,
