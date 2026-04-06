@@ -18,6 +18,7 @@ Requires an authenticated backend session cookie created by the Google OAuth flo
 Notes:
 
 - `identity` is derived server-side from the authenticated Google user.
+- `identity` is a stable opaque server-derived identifier, not the raw Google subject.
 - `join_key` is no longer accepted.
 
 ## Response (200)
@@ -26,7 +27,7 @@ Notes:
 {
   "token": "jwt",
   "expires_at": "2026-03-02T22:00:00Z",
-  "identity": "google-subject",
+  "identity": "u_h6v0X5Qh5R5A7o4rF0j6r7Q2C3e4m5n6p7q8",
   "game_role": "player"
 }
 ```

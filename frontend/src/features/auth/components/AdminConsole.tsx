@@ -284,7 +284,7 @@ function EditableUserCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--c-text-faint)]">
-        <span>{draft.google_subject ? "Linked to Google account" : "Not signed in yet"}</span>
+        <span>{draft.is_linked ? "Linked to Google account" : "Not signed in yet"}</span>
         <span>{draft.game_role === "GAMEMASTER" ? "Gamemaster access" : "Player access"}</span>
       </div>
       {error ? <p className="mt-3 text-sm text-[var(--c-ember)]">{error}</p> : null}

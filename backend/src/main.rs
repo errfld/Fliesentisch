@@ -1,7 +1,7 @@
 mod users;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{ConnectInfo, Path, Query, State},
     http::{
         header::{ACCEPT, CONTENT_TYPE},
         HeaderValue, Method, StatusCode,
@@ -19,7 +19,7 @@ use rand::{rngs::OsRng, RngCore};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, env, net::SocketAddr, sync::Arc};
+use std::{collections::HashSet, env, net::SocketAddr, sync::Arc, time::Duration as StdDuration};
 use thiserror::Error;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
@@ -86,8 +86,21 @@ async fn main() {
 
     info!("auth database initialized at {}", config.database_url);
 
+    let http_client = match Client::builder()
+        .connect_timeout(StdDuration::from_secs(5))
+        .timeout(StdDuration::from_secs(15))
+        .pool_idle_timeout(StdDuration::from_secs(30))
+        .build()
+    {
+        Ok(client) => client,
+        Err(err) => {
+            error!("http client init error: {err}");
+            std::process::exit(1);
+        }
+    };
+
     let state = Arc::new(AppState {
-        http_client: Client::new(),
+        http_client,
         config,
         user_store,
     });
@@ -97,7 +110,12 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .expect("bind listener");
-    axum::serve(listener, app).await.expect("serve app");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("serve app");
 }
 
 fn build_router(state: Arc<AppState>) -> Router {
@@ -333,9 +351,20 @@ async fn logout(
 async fn dev_login(
     State(state): State<Arc<AppState>>,
     jar: CookieJar,
-    Query(params): Query<DevLoginQuery>,
+    request: axum::extract::Request,
 ) -> Result<impl IntoResponse, ApiError> {
+    let params = Query::<DevLoginQuery>::try_from_uri(request.uri())
+        .map_err(|err| ApiError::BadRequest(err.to_string()))?
+        .0;
     if !state.config.enable_dev_login {
+        return Err(ApiError::NotFound("not found".to_string()));
+    }
+    let is_loopback = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|value| value.0.ip().is_loopback())
+        .unwrap_or(false);
+    if !cfg!(debug_assertions) && !is_loopback {
         return Err(ApiError::NotFound("not found".to_string()));
     }
     if params.email.trim().is_empty() {
@@ -454,6 +483,7 @@ async fn mint_token(
     Json(req): Json<TokenRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     req.validate()?;
+    let user = require_authenticated(&state, &jar).await?;
 
     if let Some(allowed_rooms) = &state.config.allowed_rooms {
         if !allowed_rooms.contains(&req.room) {
@@ -461,10 +491,10 @@ async fn mint_token(
         }
     }
 
-    let user = require_authenticated(&state, &jar).await?;
     let google_subject = user.google_subject.clone().ok_or_else(|| {
         ApiError::Forbidden("authenticated user is missing Google identity".to_string())
     })?;
+    let opaque_identity = derive_room_identity(&state.config.cookie_secret, &google_subject);
     let nickname = req.name.trim();
 
     let updated_user = state
@@ -481,7 +511,7 @@ async fn mint_token(
 
     let claims = LiveKitClaims {
         iss: state.config.livekit_api_key.clone(),
-        sub: google_subject,
+        sub: opaque_identity,
         name: updated_user
             .display_name
             .unwrap_or_else(|| nickname.to_string()),
@@ -728,6 +758,14 @@ fn random_token(num_bytes: usize) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
+fn derive_room_identity(secret: &str, google_subject: &str) -> String {
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("cookie secret already validated");
+    mac.update(b"livekit-identity:");
+    mac.update(google_subject.as_bytes());
+    format!("u_{}", URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
+}
+
 fn dev_subject_for_email(email: &str) -> String {
     let digest = Sha256::digest(email.as_bytes());
     format!("dev-{}", URL_SAFE_NO_PAD.encode(digest))
@@ -866,6 +904,8 @@ impl AppConfig {
 enum ConfigError {
     #[error("missing required env var: {0}")]
     MissingEnv(&'static str),
+    #[error("required env var must not be empty: {0}")]
+    EmptyEnv(&'static str),
     #[error("invalid bootstrap user config: {0}")]
     InvalidBootstrapUsers(String),
     #[error("invalid url: {0}")]
@@ -873,7 +913,12 @@ enum ConfigError {
 }
 
 fn read_required(key: &'static str) -> Result<String, ConfigError> {
-    env::var(key).map_err(|_| ConfigError::MissingEnv(key))
+    let value = env::var(key).map_err(|_| ConfigError::MissingEnv(key))?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(ConfigError::EmptyEnv(key));
+    }
+    Ok(trimmed.to_string())
 }
 
 fn read_optional(key: &'static str) -> Option<String> {
@@ -905,7 +950,13 @@ fn parse_optional_set(input: Option<String>) -> Option<HashSet<String>> {
 }
 
 fn parse_url(value: String) -> Result<Url, ConfigError> {
-    Url::parse(&value).map_err(|err| ConfigError::InvalidUrl(err.to_string()))
+    let url = Url::parse(&value).map_err(|err| ConfigError::InvalidUrl(err.to_string()))?;
+    if url.host_str().is_none() {
+        return Err(ConfigError::InvalidUrl(format!(
+            "missing host in url: {value}"
+        )));
+    }
+    Ok(url)
 }
 
 fn origin_from_url(url: &Url) -> String {
@@ -1021,7 +1072,7 @@ struct AdminUser {
     id: i64,
     email: String,
     display_name: Option<String>,
-    google_subject: Option<String>,
+    is_linked: bool,
     platform_role: PlatformRole,
     game_role: GameRole,
     is_active: bool,
@@ -1033,7 +1084,7 @@ impl From<AuthUser> for AdminUser {
             id: user.id,
             email: user.email,
             display_name: user.display_name,
-            google_subject: user.google_subject,
+            is_linked: user.google_subject.is_some(),
             platform_role: user.platform_role,
             game_role: user.game_role,
             is_active: user.is_active,
@@ -1273,7 +1324,7 @@ mod tests {
     async fn session_endpoint_reports_authenticated_user() {
         let state = test_state().await;
         let cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
-        let app = build_router(state);
+        let app = build_router(state.clone());
 
         let response = app
             .oneshot(
@@ -1314,10 +1365,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn token_endpoint_rejects_unauthenticated_before_room_allowlist() {
+        let app = build_router(test_state().await);
+
+        let payload = serde_json::json!({
+            "room": "room-c",
+            "name": "Alice"
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn token_endpoint_returns_jwt_when_authenticated() {
         let state = test_state().await;
         let cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
-        let app = build_router(state);
+        let app = build_router(state.clone());
 
         let payload = serde_json::json!({
             "room": "dnd-table-1",
@@ -1350,8 +1425,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decoded.claims.video.room, "dnd-table-1");
-        assert_eq!(decoded.claims.sub, "google-player");
-        assert_eq!(parsed.identity, "google-player");
+        assert_eq!(decoded.claims.sub, parsed.identity);
+        assert_eq!(
+            parsed.identity,
+            derive_room_identity(&state.config.cookie_secret, "google-player")
+        );
+        assert_ne!(parsed.identity, "google-player");
     }
 
     #[tokio::test]

@@ -18,7 +18,7 @@ export type AdminUser = {
   id: number;
   email: string;
   display_name?: string;
-  google_subject?: string;
+  is_linked: boolean;
   platform_role: PlatformRole;
   game_role: GameRole;
   is_active: boolean;
