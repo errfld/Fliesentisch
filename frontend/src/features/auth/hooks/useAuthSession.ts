@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchAuthSession, logout as logoutRequest } from "@/features/auth/lib/auth-api";
 import type { AuthSession } from "@/features/auth/types";
 
@@ -11,7 +11,7 @@ export function useAuthSession() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -24,13 +24,13 @@ export function useAuthSession() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -42,9 +42,9 @@ export function useAuthSession() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const isAuthenticated = useMemo(() => session.authenticated, [session.authenticated]);
+  const isAuthenticated = session.authenticated;
 
   return {
     error,

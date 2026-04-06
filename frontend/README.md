@@ -25,18 +25,14 @@ If `/api/v1/token` proxy requests fail with `ECONNREFUSED 127.0.0.1:8787`, the a
 - `LIVEKIT_API_KEY`
 - `LIVEKIT_API_SECRET`
 
-## Simple Auth
+## Auth Flow
 
-The home page now supports a small backend-owned auth flow:
+The home page now uses the backend-owned Google session flow:
 
-- sign in with an allowlisted email
-- backend sets a signed session cookie
-- `/api/v1/token` returns `game_role` when that session exists
-
-This is a transition path, not the final OAuth flow:
-
-- email ownership is not verified yet
-- legacy join-key entry still works when no session is present
+- sign in with an allowlisted Google account
+- backend completes the Google callback and sets a signed session cookie
+- `/api/v1/token` derives identity server-side and returns `game_role` for the authenticated session
+- the home screen shows the auth-aware landing page, unauthorized users are routed to the unauthorized screen, and admins can manage access from the admin screen
 
 ## Multi-client local smoke test
 
@@ -73,7 +69,7 @@ pnpm clients:stop
 Notes:
 - Run the app locally (`pnpm dev`) before starting clients.
 - This launcher uses fake media devices and auto-grants mic/camera permissions to avoid prompt friction.
-- `AUTH_DEV_LOGIN=1` uses the backend's development-only login redirect, which must be enabled in the backend with `AUTH_ENABLE_DEV_LOGIN=true`.
+- `AUTH_DEV_LOGIN=1` uses the backend's development-only login redirect, which must be enabled in the backend with `AUTH_ENABLE_DEV_LOGIN` set to any accepted truthy value: `1`, `true`, `TRUE`, `yes`, or `YES`.
 
 ## E2E
 

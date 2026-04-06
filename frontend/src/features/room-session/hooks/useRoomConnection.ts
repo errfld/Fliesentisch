@@ -36,6 +36,13 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
 
   useEffect(() => {
     if (!displayName.trim()) {
+      setGameRole(undefined);
+      setToken("");
+      setIdentity("");
+      setRoom(null);
+      setActiveSpeakers(new Set());
+      setError("Display name cannot be empty");
+      setIsConnecting(false);
       return;
     }
 

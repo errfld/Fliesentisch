@@ -127,8 +127,7 @@ fn cors_layer(frontend_origins: &[String]) -> CorsLayer {
         return CorsLayer::new()
             .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
             .allow_headers([ACCEPT, CONTENT_TYPE])
-            .allow_origin(Any)
-            .allow_credentials(true);
+            .allow_origin(Any);
     }
 
     let origins = frontend_origins
@@ -228,79 +227,53 @@ async fn handle_google_callback(
     let clear_jar = clear_oauth_cookies(&state.config, jar);
 
     if let Some(error_code) = params.error.as_deref() {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(
-                &state.config,
-                "google_denied",
-                Some(error_code),
-            )),
-        ));
+        let redirect = unauthorized_redirect(&state.config, "google_denied", Some(error_code))?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     }
 
     let Some(code) = params.code.as_deref() else {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(
-                &state.config,
-                "missing_code",
-                params.error_description.as_deref(),
-            )),
-        ));
+        let redirect = unauthorized_redirect(
+            &state.config,
+            "missing_code",
+            params.error_description.as_deref(),
+        )?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     };
 
     let Some(expected_state) = expected_state else {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(&state.config, "missing_state", None)),
-        ));
+        let redirect = unauthorized_redirect(&state.config, "missing_state", None)?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     };
     let Some(pkce_verifier) = pkce_verifier else {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(
-                &state.config,
-                "missing_verifier",
-                None,
-            )),
-        ));
+        let redirect = unauthorized_redirect(&state.config, "missing_verifier", None)?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     };
 
     if params.state.as_deref() != Some(expected_state.as_str()) {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(
-                &state.config,
-                "state_mismatch",
-                None,
-            )),
-        ));
+        let redirect = unauthorized_redirect(&state.config, "state_mismatch", None)?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     }
 
     let google_user = match exchange_google_code(&state, code, &pkce_verifier).await {
         Ok(user) => user,
         Err(err) => {
             error!("google oauth exchange error: {err}");
-            return Ok((
-                clear_jar,
-                Redirect::to(&unauthorized_redirect(
-                    &state.config,
-                    "oauth_exchange_failed",
-                    Some("Unable to complete Google sign-in."),
-                )),
-            ));
+            let redirect = unauthorized_redirect(
+                &state.config,
+                "oauth_exchange_failed",
+                Some("Unable to complete Google sign-in."),
+            )?;
+            return Ok((clear_jar, Redirect::to(&redirect)));
         }
     };
 
     if !google_user.email_verified {
-        return Ok((
-            clear_jar,
-            Redirect::to(&unauthorized_redirect(
-                &state.config,
-                "email_not_verified",
-                Some("Google account email must be verified."),
-            )),
-        ));
+        let redirect = unauthorized_redirect(
+            &state.config,
+            "email_not_verified",
+            Some("Google account email must be verified."),
+        )?;
+        return Ok((clear_jar, Redirect::to(&redirect)));
     }
 
     let user = match state
@@ -313,15 +286,15 @@ async fn handle_google_callback(
         .await
     {
         Ok(user) => user,
-        Err(StoreError::UnknownUser(_)) | Err(StoreError::InactiveUser(_)) => {
-            return Ok((
-                clear_jar,
-                Redirect::to(&unauthorized_redirect(
-                    &state.config,
-                    "access_denied",
-                    Some("Your Google account is not authorized for this table."),
-                )),
-            ));
+        Err(StoreError::UnknownUser(_))
+        | Err(StoreError::InactiveUser(_))
+        | Err(StoreError::GoogleSubjectMismatch(_, _)) => {
+            let redirect = unauthorized_redirect(
+                &state.config,
+                "access_denied",
+                Some("Your Google account is not authorized for this table."),
+            )?;
+            return Ok((clear_jar, Redirect::to(&redirect)));
         }
         Err(err) => {
             error!("authorize google user error: {err}");
@@ -595,16 +568,25 @@ async fn exchange_google_code(
         ])
         .send()
         .await
-        .map_err(|_| ApiError::Internal)?;
+        .map_err(|err| {
+            error!("Google token exchange send error: {err:?}");
+            ApiError::Internal
+        })?;
 
     if !token_response.status().is_success() {
+        let status = token_response.status();
+        let body = token_response
+            .text()
+            .await
+            .unwrap_or_else(|err| format!("<failed to read response body: {err}>"));
+        error!("Google token exchange failed: status={status}, body={body}");
         return Err(ApiError::Internal);
     }
 
-    let token_body: GoogleTokenResponse = token_response
-        .json()
-        .await
-        .map_err(|_| ApiError::Internal)?;
+    let token_body: GoogleTokenResponse = token_response.json().await.map_err(|err| {
+        error!("Google token exchange response parse error: {err:?}");
+        ApiError::Internal
+    })?;
 
     let userinfo_response = state
         .http_client
@@ -612,16 +594,25 @@ async fn exchange_google_code(
         .bearer_auth(token_body.access_token)
         .send()
         .await
-        .map_err(|_| ApiError::Internal)?;
+        .map_err(|err| {
+            error!("Google userinfo fetch send error: {err:?}");
+            ApiError::Internal
+        })?;
 
     if !userinfo_response.status().is_success() {
+        let status = userinfo_response.status();
+        let body = userinfo_response
+            .text()
+            .await
+            .unwrap_or_else(|err| format!("<failed to read response body: {err}>"));
+        error!("Google userinfo fetch failed: status={status}, body={body}");
         return Err(ApiError::Internal);
     }
 
-    userinfo_response
-        .json()
-        .await
-        .map_err(|_| ApiError::Internal)
+    userinfo_response.json().await.map_err(|err| {
+        error!("Google userinfo response parse error: {err:?}");
+        ApiError::Internal
+    })
 }
 
 async fn create_session_cookie(
@@ -658,6 +649,7 @@ fn store_to_api_error(err: StoreError) -> ApiError {
         StoreError::LastAdminRemoval => ApiError::Conflict(err.to_string()),
         StoreError::UnknownUser(_) => ApiError::Forbidden(err.to_string()),
         StoreError::InactiveUser(_) => ApiError::Forbidden(err.to_string()),
+        StoreError::GoogleSubjectMismatch(_, _) => ApiError::Forbidden(err.to_string()),
         other => {
             error!("store error: {other}");
             ApiError::Internal
@@ -753,14 +745,21 @@ fn sanitize_next_path(next: Option<&str>) -> String {
     }
 }
 
-fn unauthorized_redirect(config: &AppConfig, reason: &str, detail: Option<&str>) -> String {
-    let mut url = Url::parse(&config.absolute_frontend_path(UNAUTHORIZED_PATH))
-        .expect("valid unauthorized redirect url");
+fn unauthorized_redirect(
+    config: &AppConfig,
+    reason: &str,
+    detail: Option<&str>,
+) -> Result<String, ApiError> {
+    let unauthorized_path = config.absolute_frontend_path(UNAUTHORIZED_PATH);
+    let mut url = Url::parse(&unauthorized_path).map_err(|err| {
+        error!("invalid unauthorized redirect url {unauthorized_path}: {err}");
+        ApiError::Internal
+    })?;
     url.query_pairs_mut().append_pair("reason", reason);
     if let Some(detail) = detail {
         url.query_pairs_mut().append_pair("detail", detail);
     }
-    url.to_string()
+    Ok(url.to_string())
 }
 
 #[derive(Debug, Clone)]
