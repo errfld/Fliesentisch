@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DisconnectReason, Room, RoomEvent } from "livekit-client";
+import type { GameRole } from "@/features/room-session/types";
 import {
   areSetsEqual,
   formatConnectionError,
@@ -22,6 +23,7 @@ const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
 };
 
 export function useRoomConnection({ roomName, displayName }: UseRoomConnectionInput) {
+  const [gameRole, setGameRole] = useState<GameRole | undefined>(undefined);
   const [token, setToken] = useState("");
   const [identity, setIdentity] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
@@ -38,6 +40,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
     }
 
     const controller = new AbortController();
+    setGameRole(undefined);
     setToken("");
     setIdentity("");
     setIsConnecting(true);
@@ -63,6 +66,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
           throw new Error(`${code}: ${message}`);
         }
 
+        setGameRole(normalizeGameRole(body?.game_role));
         setIdentity(body.identity ?? "");
         setToken(body.token);
       } catch (err) {
@@ -132,7 +136,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
 
       if (reason && reason !== DisconnectReason.CLIENT_INITIATED) {
         if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
-          setError("Disconnected: duplicate identity. Refresh to generate a new client ID.");
+          setError("Disconnected: duplicate identity.");
         } else {
           setError(DISCONNECT_MESSAGES[reason] ?? `Disconnected (${String(reason)}).`);
         }
@@ -179,9 +183,14 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
     activeSpeakers,
     disconnect: () => room?.disconnect(),
     error,
+    gameRole,
     identity,
     isConnecting,
     renderVersion,
     room
   };
+}
+
+function normalizeGameRole(value: unknown): GameRole | undefined {
+  return value === "gamemaster" || value === "player" ? value : undefined;
 }

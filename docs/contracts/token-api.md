@@ -26,9 +26,12 @@ Notes:
 {
   "token": "jwt",
   "expires_at": "2026-03-02T22:00:00Z",
-  "identity": "google-subject"
+  "identity": "google-subject",
+  "game_role": "player"
 }
 ```
+
+`game_role` is included only when an authenticated backend session is present (`"gamemaster"` or `"player"`).
 
 ## Error
 
@@ -48,3 +51,5 @@ Notes:
 - `401` missing or invalid backend session
 - `403` room not allowed
 - `500` unexpected failure
+
+The minted LiveKit token also includes `attributes.game_role` so clients can verify trusted GM publishers over the realtime channel.

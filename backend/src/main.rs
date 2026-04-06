@@ -535,6 +535,7 @@ async fn mint_token(
             token,
             expires_at: expiry,
             identity: claims.sub,
+            game_role: updated_user.game_role,
         }),
     ))
 }
@@ -981,6 +982,7 @@ struct TokenResponse {
     token: String,
     expires_at: DateTime<Utc>,
     identity: String,
+    game_role: GameRole,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

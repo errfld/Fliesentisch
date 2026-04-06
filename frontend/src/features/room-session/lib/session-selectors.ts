@@ -1,8 +1,11 @@
 import { Track } from "livekit-client";
 import type { RemoteTrack, Room } from "livekit-client";
-import type { Whisper } from "@/lib/protocol";
+import type { SplitState, Whisper } from "@/lib/protocol";
 import type { AudioTrackModel, ParticipantRosterItem, VideoTileModel } from "@/features/room-session/types";
 import { formatIdentityLabel, getWhisperLabel } from "@/features/room-session/lib/session-helpers";
+
+export const MAIN_SPLIT_ROOM_ID = "main";
+export const MAIN_SPLIT_ROOM_NAME = "Main Table";
 
 export function buildVideoTiles(
   room: Room | null,
@@ -73,6 +76,7 @@ export function buildAudioTracks(room: Room | null): AudioTrackModel[] {
 
       tracks.push({
         key: `${participant.identity}-${publication.trackSid}`,
+        identity: participant.identity,
         track: publication.track,
         isMain: publication.trackName === "main"
       });
@@ -142,4 +146,79 @@ export function orderGridTiles(videoTiles: VideoTileModel[], spotlightIdentity?:
   }
 
   return ordered;
+}
+
+export function resolveParticipantRoomId(splitState: SplitState, participantIdentity: string): string {
+  if (!splitState.isActive || !participantIdentity) {
+    return MAIN_SPLIT_ROOM_ID;
+  }
+
+  const assignedRoomId = splitState.assignments[participantIdentity];
+  if (!assignedRoomId) {
+    return MAIN_SPLIT_ROOM_ID;
+  }
+
+  const roomExists = splitState.rooms.some((room) => room.id === assignedRoomId);
+  return roomExists ? assignedRoomId : MAIN_SPLIT_ROOM_ID;
+}
+
+type SplitViewInput = {
+  splitState: SplitState;
+  viewerIdentity: string;
+  viewerIsGamemaster: boolean;
+};
+
+export function filterParticipantIdentitiesForSplitView(
+  participantIdentities: string[],
+  splitView: SplitViewInput
+): string[] {
+  if (!splitView.splitState.isActive || splitView.viewerIsGamemaster || !splitView.viewerIdentity) {
+    return participantIdentities;
+  }
+
+  const viewerRoomId = resolveParticipantRoomId(splitView.splitState, splitView.viewerIdentity);
+  return participantIdentities.filter((participantIdentity) => {
+    if (participantIdentity === splitView.viewerIdentity) {
+      return true;
+    }
+
+    if (splitView.splitState.gmIdentity && participantIdentity === splitView.splitState.gmIdentity) {
+      return true;
+    }
+
+    return resolveParticipantRoomId(splitView.splitState, participantIdentity) === viewerRoomId;
+  });
+}
+
+export function filterVideoTilesForSplitView(
+  videoTiles: VideoTileModel[],
+  splitView: SplitViewInput
+): VideoTileModel[] {
+  const visibleParticipants = new Set(filterParticipantIdentitiesForSplitView(videoTiles.map((tile) => tile.identity), splitView));
+  return videoTiles.filter((tile) => visibleParticipants.has(tile.identity));
+}
+
+export function filterAudioTracksForSplitView(
+  audioTracks: AudioTrackModel[],
+  splitView: SplitViewInput
+): AudioTrackModel[] {
+  if (!splitView.splitState.isActive || splitView.viewerIsGamemaster || !splitView.viewerIdentity) {
+    return audioTracks;
+  }
+
+  const viewerRoomId = resolveParticipantRoomId(splitView.splitState, splitView.viewerIdentity);
+  return audioTracks.filter((track) => {
+    if (splitView.splitState.gmIdentity && track.identity === splitView.splitState.gmIdentity) {
+      if (!track.isMain) {
+        return true;
+      }
+
+      return (
+        splitView.splitState.gmBroadcastActive ||
+        splitView.splitState.gmFocusRoomId === viewerRoomId
+      );
+    }
+
+    return resolveParticipantRoomId(splitView.splitState, track.identity) === viewerRoomId;
+  });
 }
