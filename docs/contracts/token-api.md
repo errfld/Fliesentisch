@@ -17,9 +17,9 @@ Requires an authenticated backend session cookie created by the Google OAuth flo
 
 Notes:
 
-- `identity` is derived server-side from the authenticated Google user.
-- `identity` is a stable opaque server-derived identifier, not the raw Google subject.
-- `join_key` is no longer accepted.
+- Derived server-side: `identity` comes from the authenticated Google user.
+- The returned `identity` is a stable opaque server-derived identifier, not the raw Google subject.
+- The API no longer accepts `join_key`.
 
 ## Response (200)
 

@@ -494,7 +494,7 @@ async fn mint_token(
     let google_subject = user.google_subject.clone().ok_or_else(|| {
         ApiError::Forbidden("authenticated user is missing Google identity".to_string())
     })?;
-    let opaque_identity = derive_room_identity(&state.config.cookie_secret, &google_subject);
+    let opaque_identity = derive_room_identity(&state.config.cookie_secret, &google_subject)?;
     let nickname = req.name.trim();
 
     let updated_user = state
@@ -758,12 +758,14 @@ fn random_token(num_bytes: usize) -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-fn derive_room_identity(secret: &str, google_subject: &str) -> String {
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("cookie secret already validated");
+fn derive_room_identity(secret: &str, google_subject: &str) -> Result<String, ApiError> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
     mac.update(b"livekit-identity:");
     mac.update(google_subject.as_bytes());
-    format!("u_{}", URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
+    Ok(format!(
+        "u_{}",
+        URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
+    ))
 }
 
 fn dev_subject_for_email(email: &str) -> String {
@@ -1428,7 +1430,7 @@ mod tests {
         assert_eq!(decoded.claims.sub, parsed.identity);
         assert_eq!(
             parsed.identity,
-            derive_room_identity(&state.config.cookie_secret, "google-player")
+            derive_room_identity(&state.config.cookie_secret, "google-player").unwrap()
         );
         assert_ne!(parsed.identity, "google-player");
     }
