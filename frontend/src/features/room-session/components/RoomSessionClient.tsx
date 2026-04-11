@@ -1,4 +1,4 @@
-import { RoomSession } from "@/components/RoomSession";
+import { RoomSession } from "@/features/room-session/components/RoomSession";
 
 type RoomSessionClientProps = {
   roomName: string;

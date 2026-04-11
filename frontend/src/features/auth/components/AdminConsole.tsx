@@ -26,7 +26,7 @@ const EMPTY_DRAFT: UserDraft = {
 export function AdminConsole({ currentUser }: AdminConsoleProps) {
   const { createUser, error, isLoading, removeUser, saveUser, users } = useAdminUsers(true);
   const [draft, setDraft] = useState<UserDraft>(EMPTY_DRAFT);
-  const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [pendingUserIds, setPendingUserIds] = useState<Set<number>>(() => new Set());
   const [createError, setCreateError] = useState<string | null>(null);
 
   const onCreate = async () => {
@@ -44,27 +44,40 @@ export function AdminConsole({ currentUser }: AdminConsoleProps) {
     }
   };
 
+  const markUserPending = (userId: number, isPending: boolean) => {
+    setPendingUserIds((current) => {
+      const next = new Set(current);
+      if (isPending) {
+        next.add(userId);
+      } else {
+        next.delete(userId);
+      }
+      return next;
+    });
+  };
+
   const onSave = async (user: AdminUser) => {
-    setBusyUserId(user.id);
+    markUserPending(user.id, true);
     try {
+      const trimmedDisplayName = user.display_name?.trim() ?? "";
       await saveUser(user.id, {
-        display_name: user.display_name?.trim() || undefined,
+        display_name: trimmedDisplayName === "" ? "" : trimmedDisplayName,
         email: user.email.trim(),
         game_role: user.game_role,
         is_active: user.is_active,
         platform_role: user.platform_role
       });
     } finally {
-      setBusyUserId(null);
+      markUserPending(user.id, false);
     }
   };
 
   const onDelete = async (userId: number) => {
-    setBusyUserId(userId);
+    markUserPending(userId, true);
     try {
       await removeUser(userId);
     } finally {
-      setBusyUserId(null);
+      markUserPending(userId, false);
     }
   };
 
@@ -159,7 +172,7 @@ export function AdminConsole({ currentUser }: AdminConsoleProps) {
             {isLoading ? <p className="text-sm text-[var(--c-text-dim)]">Loading users...</p> : null}
             {users.map((user) => (
               <EditableUserCard
-                busy={busyUserId === user.id}
+                busy={pendingUserIds.has(user.id)}
                 key={user.id}
                 onDelete={onDelete}
                 onSave={onSave}

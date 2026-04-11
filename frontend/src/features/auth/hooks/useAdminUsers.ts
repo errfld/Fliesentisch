@@ -35,20 +35,40 @@ export function useAdminUsers(enabled: boolean) {
     void reload();
   }, [reload]);
 
-  const createUser = async (input: AdminUserInput) => {
-    const user = await createAdminUser(input);
-    setUsers((current) => [...current, user].sort((a, b) => a.email.localeCompare(b.email)));
-  };
+  const createUser = useCallback(async (input: AdminUserInput) => {
+    try {
+      const user = await createAdminUser(input);
+      setUsers((current) => [...current, user].sort((a, b) => a.email.localeCompare(b.email)));
+      setError(null);
+      return user;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create user");
+      throw err;
+    }
+  }, []);
 
-  const saveUser = async (userId: number, patch: AdminUserPatch) => {
-    const updated = await updateAdminUser(userId, patch);
-    setUsers((current) => current.map((user) => (user.id === userId ? updated : user)));
-  };
+  const saveUser = useCallback(async (userId: number, patch: AdminUserPatch) => {
+    try {
+      const updated = await updateAdminUser(userId, patch);
+      setUsers((current) => current.map((user) => (user.id === userId ? updated : user)));
+      setError(null);
+      return updated;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save user");
+      throw err;
+    }
+  }, []);
 
-  const removeUser = async (userId: number) => {
-    await deleteAdminUser(userId);
-    setUsers((current) => current.filter((user) => user.id !== userId));
-  };
+  const removeUser = useCallback(async (userId: number) => {
+    try {
+      await deleteAdminUser(userId);
+      setUsers((current) => current.filter((user) => user.id !== userId));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+      throw err;
+    }
+  }, []);
 
   return {
     createUser,

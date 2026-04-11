@@ -13,8 +13,8 @@
     "clients:start": "bash ./scripts/multi-clients.sh start",
     "clients:stop": "bash ./scripts/multi-clients.sh stop",
     "clients:list": "bash ./scripts/multi-clients.sh list",
-    "test:e2e": "AUTH_BASE_URL=http://127.0.0.1:3100 AUTH_COOKIE_SECRET=e2e-cookie-secret AUTH_ENABLE_DEV_LOGIN=true AUTH_BOOTSTRAP_ADMIN_EMAILS=gm@example.com AUTH_BOOTSTRAP_GAMEMASTER_EMAILS=gm@example.com AUTH_BOOTSTRAP_PLAYER_EMAILS=alice@example.com,bob@example.com,carol@example.com GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret FRONTEND_ORIGINS=http://127.0.0.1:3100 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=devsecret pnpm --dir .. compose:up && playwright test -c playwright.config.ts",
-    "test:e2e:headed": "AUTH_BASE_URL=http://127.0.0.1:3100 AUTH_COOKIE_SECRET=e2e-cookie-secret AUTH_ENABLE_DEV_LOGIN=true AUTH_BOOTSTRAP_ADMIN_EMAILS=gm@example.com AUTH_BOOTSTRAP_GAMEMASTER_EMAILS=gm@example.com AUTH_BOOTSTRAP_PLAYER_EMAILS=alice@example.com,bob@example.com,carol@example.com GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret FRONTEND_ORIGINS=http://127.0.0.1:3100 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=devsecret pnpm --dir .. compose:up && playwright test -c playwright.config.ts --headed",
+    "test:e2e": "bash ./scripts/run-e2e.sh",
+    "test:e2e:headed": "bash ./scripts/run-e2e.sh --headed",
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {

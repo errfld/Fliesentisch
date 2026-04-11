@@ -116,7 +116,7 @@ start_clients() {
   local room_encoded
   room_encoded="$(urlencode "$ROOM")"
 
-    local idx name session url
+  local idx name session url
   for idx in "${!names[@]}"; do
     name="${names[$idx]}"
     session="${SESSION_PREFIX}-$((idx + 1))"

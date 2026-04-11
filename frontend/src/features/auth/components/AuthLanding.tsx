@@ -76,7 +76,13 @@ export function AuthLanding({ user, onLogout, isLoggingOut }: AuthLandingProps) 
                   {user.game_role === "GAMEMASTER" ? "Gamemaster" : "Player"}
                 </p>
               </div>
-              <button className="act act--hot" onClick={onLogout} type="button">
+              <button
+                aria-busy={isLoggingOut}
+                className="act act--hot"
+                disabled={isLoggingOut}
+                onClick={onLogout}
+                type="button"
+              >
                 {isLoggingOut ? "Signing out..." : "Sign out"}
               </button>
             </div>

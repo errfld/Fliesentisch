@@ -19,16 +19,16 @@ test("home page requires sign-in before join form is shown", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Join the table" })).toHaveCount(0);
 });
 
-test("admin can manage users and non-admin is blocked from the admin console", async ({ browser }, testInfo) => {
+test("admin can manage users and non-admin is blocked from the admin console", async ({ browser }) => {
   const adminContext = await browser.newContext();
   const adminPage = await adminContext.newPage();
-  void testInfo;
+  const adminEmail = `gm@${E2E_EMAIL_DOMAIN}`;
 
   try {
-    await adminPage.goto(devLoginUrl(`gm@${E2E_EMAIL_DOMAIN}`, "/admin", "GM"));
+    await adminPage.goto(devLoginUrl(adminEmail, "/admin", "GM"));
     await expect(adminPage.getByRole("heading", { name: "Allowlist and roles" })).toBeVisible();
     await expect(adminPage.getByTestId("admin-create-form")).toBeVisible();
-    await expect(adminPage.getByText("gm@example.com")).toBeVisible();
+    await expect(adminPage.getByText(adminEmail)).toBeVisible();
   } finally {
     await adminContext.close();
   }

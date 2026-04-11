@@ -20,6 +20,14 @@ impl UserStore {
         };
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("PRAGMA foreign_keys = ON")
+                        .execute(conn)
+                        .await
+                        .map(|_| ())
+                })
+            })
             .connect(database_url)
             .await?;
 
@@ -30,10 +38,6 @@ impl UserStore {
     }
 
     async fn initialize(&self) -> Result<(), StoreError> {
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&self.pool)
-            .await?;
-
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS users (
@@ -396,7 +400,8 @@ impl UserStore {
         let next_game_role = patch.game_role.unwrap_or(existing.game_role);
         let next_is_active = patch.is_active.unwrap_or(existing.is_active);
 
-        self.ensure_admin_guardrails(&existing, next_platform_role, next_is_active)
+        let mut tx = self.pool.begin().await?;
+        self.ensure_admin_guardrails_tx(&mut tx, &existing, next_platform_role, next_is_active)
             .await?;
 
         let result = sqlx::query(
@@ -420,14 +425,19 @@ impl UserStore {
         .bind(next_game_role.as_str())
         .bind(if next_is_active { 1_i64 } else { 0_i64 })
         .bind(user_id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await;
 
         match result {
-            Ok(_) => self
-                .find_user_by_id(user_id)
-                .await?
-                .ok_or(StoreError::UserNotFound(user_id)),
+            Ok(result) => {
+                if result.rows_affected() == 0 {
+                    return Err(StoreError::UserNotFound(user_id));
+                }
+                tx.commit().await?;
+                self.find_user_by_id(user_id)
+                    .await?
+                    .ok_or(StoreError::UserNotFound(user_id))
+            }
             Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
                 Err(StoreError::EmailAlreadyExists(next_normalized_email))
             }
@@ -440,18 +450,20 @@ impl UserStore {
             return Err(StoreError::UserNotFound(user_id));
         };
 
-        self.ensure_admin_guardrails(&existing, PlatformRole::User, false)
+        let mut tx = self.pool.begin().await?;
+        self.ensure_admin_guardrails_tx(&mut tx, &existing, PlatformRole::User, false)
             .await?;
 
         let result = sqlx::query("DELETE FROM users WHERE id = ?")
             .bind(user_id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         if result.rows_affected() == 0 {
             return Err(StoreError::UserNotFound(user_id));
         }
 
+        tx.commit().await?;
         Ok(())
     }
 
@@ -478,8 +490,9 @@ impl UserStore {
         maybe_row.map(auth_user_from_row).transpose()
     }
 
-    async fn ensure_admin_guardrails(
+    async fn ensure_admin_guardrails_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         existing: &AuthUser,
         next_platform_role: PlatformRole,
         next_is_active: bool,
@@ -502,7 +515,7 @@ impl UserStore {
             "#,
         )
         .bind(existing.id)
-        .fetch_one(&self.pool)
+        .fetch_one(&mut **tx)
         .await?;
 
         if remaining_admins == 0 {

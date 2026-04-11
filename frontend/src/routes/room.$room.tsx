@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RoomSessionClient } from "@/components/RoomSessionClient";
+import { RoomSessionClient } from "@/features/room-session/components/RoomSessionClient";
 
 type RoomSearch = {
   name?: string;

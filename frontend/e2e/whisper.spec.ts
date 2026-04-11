@@ -5,7 +5,8 @@ const TEST_ROOM = process.env.E2E_ROOM ?? "dnd-table-1";
 const E2E_EMAIL_DOMAIN = process.env.E2E_EMAIL_DOMAIN ?? "example.com";
 
 function devLoginUrl(room: string, displayName: string): string {
-  const next = `/room/${room}?name=${encodeURIComponent(displayName)}`;
+  const encodedRoom = encodeURIComponent(room);
+  const next = `/room/${encodedRoom}?name=${encodeURIComponent(displayName)}`;
   const emailLocalPart = displayName.trim().toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
   const email = `${emailLocalPart || "player"}@${E2E_EMAIL_DOMAIN}`;
   const params = new URLSearchParams({
