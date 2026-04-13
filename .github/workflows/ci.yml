@@ -90,6 +90,9 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+
       - name: Enable corepack
         run: corepack enable
 
@@ -100,7 +103,18 @@ jobs:
         run: cp infrastructure/.env.example infrastructure/.env
 
       - name: Start LiveKit and Auth services
-        run: docker compose -f infrastructure/docker-compose.yml up -d livekit auth
+        run: |
+          mkdir -p frontend/test-results
+          docker compose -f infrastructure/docker-compose.yml up -d livekit
+          nohup cargo run --manifest-path backend/Cargo.toml > frontend/test-results/auth-service.log 2>&1 &
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8787/api/v1/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Auth service did not become healthy in time" >&2
+          exit 1
 
       - name: Install Playwright browser
         run: pnpm --filter frontend exec playwright install --with-deps chromium
@@ -108,11 +122,12 @@ jobs:
       - name: Run Playwright e2e
         run: pnpm --filter frontend exec playwright test -c playwright.config.ts
 
-      - name: Capture Compose logs
+      - name: Capture service logs
         if: always()
         run: |
           mkdir -p frontend/test-results
-          docker compose -f infrastructure/docker-compose.yml logs --no-color livekit auth > frontend/test-results/compose-services.log || true
+          docker compose -f infrastructure/docker-compose.yml logs --no-color livekit > frontend/test-results/compose-services.log || true
+          test -f frontend/test-results/auth-service.log || touch frontend/test-results/auth-service.log
 
       - name: Summarize Playwright failures
         if: always()
@@ -228,18 +243,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload Compose logs
+      - name: Upload service logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: compose-service-logs
-          path: frontend/test-results/compose-services.log
+          name: service-logs
+          path: |
+            frontend/test-results/compose-services.log
+            frontend/test-results/auth-service.log
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Stop docker services
+      - name: Stop services
         if: always()
-        run: docker compose -f infrastructure/docker-compose.yml down -v
+        run: |
+          pkill -f "cargo run --manifest-path backend/Cargo.toml" || true
+          docker compose -f infrastructure/docker-compose.yml down -v
 
   backend_checks:
     name: backend_checks
