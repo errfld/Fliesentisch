@@ -61,6 +61,23 @@ jobs:
     name: frontend_e2e_checks
     needs: frontend_infra_checks
     runs-on: ubuntu-latest
+    env:
+      AUTH_SERVICE_URL: http://127.0.0.1:8787
+      AUTH_BASE_URL: http://127.0.0.1:3100
+      AUTH_COOKIE_SECRET: e2e-cookie-secret-0123456789abcdef
+      AUTH_ENABLE_DEV_LOGIN: "true"
+      AUTH_BOOTSTRAP_ADMIN_EMAILS: gm@example.com
+      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: gm@example.com
+      AUTH_BOOTSTRAP_PLAYER_EMAILS: alice@example.com,bob@example.com,carol@example.com
+      GOOGLE_CLIENT_ID: e2e-client
+      GOOGLE_CLIENT_SECRET: e2e-secret
+      FRONTEND_ORIGINS: http://127.0.0.1:3100
+      LIVEKIT_API_KEY: e2e-livekit-api-key-0123456789abcdef
+      LIVEKIT_API_SECRET: e2e-livekit-api-secret-0123456789abcdef
+      VITE_LIVEKIT_URL: ws://127.0.0.1:7880
+      VITE_DEFAULT_ROOM: dnd-table-1
+      E2E_BASE_URL: http://127.0.0.1:3100
+      E2E_EMAIL_DOMAIN: example.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
