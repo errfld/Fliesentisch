@@ -93,6 +93,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
       - name: Enable corepack
         run: corepack enable
 
@@ -102,18 +107,22 @@ jobs:
       - name: Prepare infrastructure env
         run: cp infrastructure/.env.example infrastructure/.env
 
+      - name: Build auth service
+        run: cargo build --manifest-path backend/Cargo.toml --locked
+
       - name: Start LiveKit and Auth services
         run: |
           mkdir -p frontend/test-results
           docker compose -f infrastructure/docker-compose.yml up -d livekit
-          nohup cargo run --manifest-path backend/Cargo.toml > frontend/test-results/auth-service.log 2>&1 &
-          for i in {1..60}; do
+          nohup backend/target/debug/virtual-table-auth > frontend/test-results/auth-service.log 2>&1 &
+          for i in {1..120}; do
             if curl --fail --silent http://127.0.0.1:8787/api/v1/health > /dev/null; then
               exit 0
             fi
             sleep 1
           done
           echo "Auth service did not become healthy in time" >&2
+          cat frontend/test-results/auth-service.log || true
           exit 1
 
       - name: Install Playwright browser
@@ -257,7 +266,7 @@ jobs:
       - name: Stop services
         if: always()
         run: |
-          pkill -f "cargo run --manifest-path backend/Cargo.toml" || true
+          pkill -f "backend/target/debug/virtual-table-auth" || true
           docker compose -f infrastructure/docker-compose.yml down -v
 
   backend_checks:
