@@ -65,7 +65,7 @@ jobs:
       AUTH_SERVICE_URL: http://127.0.0.1:8787
       AUTH_BASE_URL: http://127.0.0.1:3100
       AUTH_COOKIE_SECRET: e2e-cookie-secret-0123456789abcdef
-      AUTH_DATABASE_URL: sqlite://./frontend/test-results/auth-e2e.db?mode=rwc
+      AUTH_DATABASE_URL: sqlite:///tmp/virtual-table-auth-e2e.db?mode=rwc
       AUTH_ENABLE_DEV_LOGIN: "true"
       AUTH_BOOTSTRAP_ADMIN_EMAILS: gm@example.com
       AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: gm@example.com
@@ -114,6 +114,7 @@ jobs:
       - name: Start LiveKit and Auth services
         run: |
           mkdir -p frontend/test-results
+          rm -f /tmp/virtual-table-auth-e2e.db
           docker compose -f infrastructure/docker-compose.yml up -d livekit
           nohup backend/target/debug/virtual-table-auth > frontend/test-results/auth-service.log 2>&1 &
           for i in {1..120}; do
