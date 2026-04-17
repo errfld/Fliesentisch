@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.8.8", features = ["macros"] }
-axum-extra = { version = "0.10.3", features = ["cookie"] }
+axum-extra = { version = "0.12.5", features = ["cookie"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.38", features = ["clock", "serde"] }
 dotenvy = "0.15.7"
@@ -20,7 +20,7 @@ sha2 = "0.10.9"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls"] }
 thiserror = "2.0.18"
 time = "0.3.47"
-tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread", "signal"] }
 tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
