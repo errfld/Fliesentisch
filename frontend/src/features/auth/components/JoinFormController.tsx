@@ -1,70 +1,44 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { JoinForm } from "@/components/JoinForm";
+import { AuthLanding } from "@/features/auth/components/AuthLanding";
 import { useAuthSession } from "@/features/auth/hooks/useAuthSession";
 
-const DEFAULT_ROOM = import.meta.env.VITE_DEFAULT_ROOM?.trim() || "dnd-table-1";
-const DEFAULT_JOIN_KEY = import.meta.env.VITE_JOIN_KEY?.trim() || "";
-
 export function JoinFormController() {
-  const navigate = useNavigate({ from: "/" });
   const auth = useAuthSession();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [room, setRoom] = useState(DEFAULT_ROOM);
-  const [joinKey, setJoinKey] = useState(DEFAULT_JOIN_KEY);
-  const [authBusy, setAuthBusy] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  if (auth.isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--c-void)]">
+        <div className="text-center">
+          <p className="display-face text-xl text-[var(--c-text-warm)]">Checking the table</p>
+          <p className="mt-3 text-sm text-[var(--c-text-dim)]">Loading backend session state...</p>
+        </div>
+      </main>
+    );
+  }
 
-    void navigate({
-      to: "/room/$room",
-      params: { room: room.trim() || DEFAULT_ROOM },
-      search: {
-        name: name.trim() || "Player",
-        joinKey: auth.isAuthenticated ? undefined : joinKey.trim() || undefined
-      }
-    });
-  };
-
-  const onSignIn = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setAuthBusy(true);
-    try {
-      await auth.login(email.trim());
-    } finally {
-      setAuthBusy(false);
-    }
-  };
+  if (auth.error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--c-void)] px-8">
+        <div className="panel max-w-xl text-center">
+          <p className="display-face text-xl text-[var(--c-ember)]">Session check failed</p>
+          <p className="mt-3 text-sm text-[var(--c-text-dim)]">{auth.error}</p>
+          <button className="chip mt-6" onClick={() => void auth.refresh()} type="button">
+            Retry
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <JoinForm
-      authBusy={authBusy}
-      authError={auth.error}
-      authIsLoading={auth.isLoading}
-      authSession={
-        auth.session
-          ? {
-              email: auth.session.email,
-              gameRole: auth.session.game_role,
-              platformRole: auth.session.platform_role
-            }
-          : null
-      }
-      email={email}
-      isAuthenticated={auth.isAuthenticated}
-      joinKey={joinKey}
-      name={name}
-      onChangeEmail={setEmail}
-      onChangeJoinKey={setJoinKey}
-      onChangeName={setName}
-      onChangeRoom={setRoom}
-      onSignIn={onSignIn}
-      onSignOut={() => void auth.logout()}
-      onSubmit={onSubmit}
-      room={room}
+    <AuthLanding
+      isLoggingOut={isLoggingOut}
+      onLogout={() => {
+        setIsLoggingOut(true);
+        void auth.logout().finally(() => setIsLoggingOut(false));
+      }}
+      user={auth.session.user}
     />
   );
 }

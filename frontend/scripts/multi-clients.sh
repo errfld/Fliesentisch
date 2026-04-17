@@ -6,7 +6,8 @@ shift || true
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 ROOM="${ROOM:-dnd-table-1}"
-JOIN_KEY="${JOIN_KEY:-}"
+AUTH_DEV_LOGIN="${AUTH_DEV_LOGIN:-}"
+AUTH_EMAIL_DOMAIN="${AUTH_EMAIL_DOMAIN:-example.com}"
 SESSION_PREFIX="${SESSION_PREFIX:-vt-sim}"
 CLIENT_COUNT="${CLIENT_COUNT:-3}"
 CLIENT_NAMES="${CLIENT_NAMES:-}"
@@ -121,8 +122,12 @@ start_clients() {
     session="${SESSION_PREFIX}-$((idx + 1))"
     url="${BASE_URL%/}/room/${room_encoded}?name=$(urlencode "$name")"
 
-    if [[ -n "$JOIN_KEY" ]]; then
-      url="${url}&joinKey=$(urlencode "$JOIN_KEY")"
+    if [[ -n "$AUTH_DEV_LOGIN" ]]; then
+      local email_slug email next
+      email_slug="$(echo "$name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/./g; s/^\.|\.$//g')"
+      email="${email_slug:-player}@$AUTH_EMAIL_DOMAIN"
+      next="/room/${room_encoded}?name=$(urlencode "$name")"
+      url="${BASE_URL%/}/api/v1/auth/dev-login?email=$(urlencode "$email")&name=$(urlencode "$name")&next=$(urlencode "$next")"
     fi
 
     close_session "$session" || true

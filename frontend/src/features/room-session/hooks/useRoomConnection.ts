@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { DisconnectReason, Room, RoomEvent } from "livekit-client";
-import { getOrCreateClientId, toIdentity } from "@/lib/client-id";
 import type { GameRole } from "@/features/room-session/types";
 import {
   areSetsEqual,
@@ -13,7 +12,6 @@ import {
 type UseRoomConnectionInput = {
   roomName: string;
   displayName: string;
-  joinKey?: string;
 };
 
 const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
@@ -24,36 +22,34 @@ const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
   [DisconnectReason.JOIN_FAILURE]: "Failed to join the room."
 };
 
-export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomConnectionInput) {
-  const [clientId, setClientId] = useState("");
+export function useRoomConnection({ roomName, displayName }: UseRoomConnectionInput) {
   const [gameRole, setGameRole] = useState<GameRole | undefined>(undefined);
   const [token, setToken] = useState("");
+  const [identity, setIdentity] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnecting, setIsConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
   const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
 
-  const livekitUrl = useMemo(() => resolveLivekitUrl(), []);
-  const identity = useMemo(() => {
-    if (!clientId) {
-      return "";
-    }
-    return toIdentity(displayName, clientId);
-  }, [clientId, displayName]);
+  const livekitUrl = resolveLivekitUrl();
 
   useEffect(() => {
-    setClientId(getOrCreateClientId());
-  }, []);
-
-  useEffect(() => {
-    if (!identity) {
+    if (!displayName.trim()) {
+      setGameRole(undefined);
+      setToken("");
+      setIdentity("");
+      setRoom(null);
+      setActiveSpeakers(new Set());
+      setError("Display name cannot be empty");
+      setIsConnecting(false);
       return;
     }
 
     const controller = new AbortController();
     setGameRole(undefined);
     setToken("");
+    setIdentity("");
     setIsConnecting(true);
     setError(null);
 
@@ -64,10 +60,9 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             room: roomName,
-            identity,
-            name: displayName,
-            join_key: joinKey
+            name: displayName
           }),
+          credentials: "include",
           signal: controller.signal
         });
 
@@ -79,6 +74,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
         }
 
         setGameRole(normalizeGameRole(body?.game_role));
+        setIdentity(body.identity ?? "");
         setToken(body.token);
       } catch (err) {
         if (controller.signal.aborted) {
@@ -93,7 +89,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
     void fetchToken();
 
     return () => controller.abort();
-  }, [displayName, identity, joinKey, roomName]);
+  }, [displayName, roomName]);
 
   useEffect(() => {
     if (!token) {
@@ -147,7 +143,7 @@ export function useRoomConnection({ roomName, displayName, joinKey }: UseRoomCon
 
       if (reason && reason !== DisconnectReason.CLIENT_INITIATED) {
         if (reason === DisconnectReason.DUPLICATE_IDENTITY) {
-          setError("Disconnected: duplicate identity. Refresh to generate a new client ID.");
+          setError("Disconnected: duplicate identity.");
         } else {
           setError(DISCONNECT_MESSAGES[reason] ?? `Disconnected (${String(reason)}).`);
         }

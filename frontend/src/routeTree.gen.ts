@@ -9,9 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RoomRoomRouteImport } from './routes/room.$room'
+import { Route as AuthUnauthorizedRouteImport } from './routes/auth.unauthorized'
 
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -22,35 +29,55 @@ const RoomRoomRoute = RoomRoomRouteImport.update({
   path: '/room/$room',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthUnauthorizedRoute = AuthUnauthorizedRouteImport.update({
+  id: '/auth/unauthorized',
+  path: '/auth/unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/room/$room'
+  fullPaths: '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/room/$room'
-  id: '__root__' | '/' | '/room/$room'
+  to: '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
+  id: '__root__' | '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
+  AuthUnauthorizedRoute: typeof AuthUnauthorizedRoute
   RoomRoomRoute: typeof RoomRoomRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -65,11 +92,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoomRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/unauthorized': {
+      id: '/auth/unauthorized'
+      path: '/auth/unauthorized'
+      fullPath: '/auth/unauthorized'
+      preLoaderRoute: typeof AuthUnauthorizedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
+  AuthUnauthorizedRoute: AuthUnauthorizedRoute,
   RoomRoomRoute: RoomRoomRoute,
 }
 export const routeTree = rootRouteImport

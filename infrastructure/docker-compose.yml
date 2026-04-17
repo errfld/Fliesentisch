@@ -16,16 +16,22 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       AUTH_BIND_ADDR: ${AUTH_BIND_ADDR:-0.0.0.0:8787}
+      AUTH_BASE_URL: ${AUTH_BASE_URL:-http://localhost}
+      AUTH_COOKIE_SECRET: ${AUTH_COOKIE_SECRET}
       AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:-sqlite:///app/data/auth.db?mode=rwc}
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-1209600}
       AUTH_BOOTSTRAP_ADMIN_EMAILS: ${AUTH_BOOTSTRAP_ADMIN_EMAILS:-}
       AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: ${AUTH_BOOTSTRAP_GAMEMASTER_EMAILS:-}
       AUTH_BOOTSTRAP_PLAYER_EMAILS: ${AUTH_BOOTSTRAP_PLAYER_EMAILS:-}
+      AUTH_ENABLE_DEV_LOGIN: ${AUTH_ENABLE_DEV_LOGIN:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      JOIN_SECRET: ${JOIN_SECRET:-}
       ALLOWED_ROOMS: ${ALLOWED_ROOMS:-dnd-table-1}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3000}
     ports:
@@ -40,13 +46,11 @@ services:
       args:
         VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-ws://localhost:7880}
         VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
-        VITE_JOIN_KEY: ${VITE_JOIN_KEY:-}
     restart: unless-stopped
     environment:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8787}
       VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-ws://localhost:7880}
       VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
-      VITE_JOIN_KEY: ${VITE_JOIN_KEY:-}
     depends_on:
       - auth
       - livekit

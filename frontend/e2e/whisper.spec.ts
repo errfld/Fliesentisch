@@ -2,6 +2,20 @@ import { expect, test } from "@playwright/test";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
 const TEST_ROOM = process.env.E2E_ROOM ?? "dnd-table-1";
+const E2E_EMAIL_DOMAIN = process.env.E2E_EMAIL_DOMAIN ?? "example.com";
+
+function devLoginUrl(room: string, displayName: string): string {
+  const encodedRoom = encodeURIComponent(room);
+  const next = `/room/${encodedRoom}?name=${encodeURIComponent(displayName)}`;
+  const emailLocalPart = displayName.trim().toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
+  const email = `${emailLocalPart || "player"}@${E2E_EMAIL_DOMAIN}`;
+  const params = new URLSearchParams({
+    email,
+    name: displayName,
+    next
+  });
+  return `/api/v1/auth/dev-login?${params.toString()}`;
+}
 
 type ParticipantClient = {
   context: BrowserContext;
@@ -12,7 +26,7 @@ type ParticipantClient = {
 async function openParticipant(browser: Browser, room: string, displayName: string): Promise<ParticipantClient> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto(`/room/${room}?name=${encodeURIComponent(displayName)}`);
+  await page.goto(devLoginUrl(room, displayName));
 
   await expect(page.getByRole("heading", { name: `Room: ${room}` })).toBeVisible();
   const identityNode = page.locator("p:has-text('You are') span.font-mono");

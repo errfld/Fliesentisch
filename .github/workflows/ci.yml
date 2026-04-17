@@ -61,6 +61,24 @@ jobs:
     name: frontend_e2e_checks
     needs: frontend_infra_checks
     runs-on: ubuntu-latest
+    env:
+      AUTH_SERVICE_URL: http://127.0.0.1:8787
+      AUTH_BASE_URL: http://127.0.0.1:3100
+      AUTH_COOKIE_SECRET: e2e-cookie-secret-0123456789abcdef
+      AUTH_DATABASE_URL: sqlite:///tmp/virtual-table-auth-e2e.db?mode=rwc
+      AUTH_ENABLE_DEV_LOGIN: "true"
+      AUTH_BOOTSTRAP_ADMIN_EMAILS: gm@example.com
+      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: gm@example.com
+      AUTH_BOOTSTRAP_PLAYER_EMAILS: alice@example.com,bob@example.com,carol@example.com
+      GOOGLE_CLIENT_ID: e2e-client
+      GOOGLE_CLIENT_SECRET: e2e-secret
+      FRONTEND_ORIGINS: http://127.0.0.1:3100
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: devsecret
+      VITE_LIVEKIT_URL: ws://127.0.0.1:7880
+      VITE_DEFAULT_ROOM: dnd-table-1
+      E2E_BASE_URL: http://127.0.0.1:3100
+      E2E_EMAIL_DOMAIN: example.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
@@ -73,6 +91,14 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
       - name: Enable corepack
         run: corepack enable
 
@@ -82,8 +108,24 @@ jobs:
       - name: Prepare infrastructure env
         run: cp infrastructure/.env.example infrastructure/.env
 
+      - name: Build auth service
+        run: cargo build --manifest-path backend/Cargo.toml --locked
+
       - name: Start LiveKit and Auth services
-        run: docker compose -f infrastructure/docker-compose.yml up -d livekit auth
+        run: |
+          mkdir -p frontend/test-results
+          rm -f /tmp/virtual-table-auth-e2e.db
+          docker compose -f infrastructure/docker-compose.yml up -d livekit
+          nohup backend/target/debug/virtual-table-auth > frontend/test-results/auth-service.log 2>&1 &
+          for i in {1..120}; do
+            if curl --fail --silent http://127.0.0.1:8787/api/v1/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Auth service did not become healthy in time" >&2
+          cat frontend/test-results/auth-service.log || true
+          exit 1
 
       - name: Install Playwright browser
         run: pnpm --filter frontend exec playwright install --with-deps chromium
@@ -91,11 +133,12 @@ jobs:
       - name: Run Playwright e2e
         run: pnpm --filter frontend exec playwright test -c playwright.config.ts
 
-      - name: Capture Compose logs
+      - name: Capture service logs
         if: always()
         run: |
           mkdir -p frontend/test-results
-          docker compose -f infrastructure/docker-compose.yml logs --no-color livekit auth > frontend/test-results/compose-services.log || true
+          docker compose -f infrastructure/docker-compose.yml logs --no-color livekit > frontend/test-results/compose-services.log || true
+          test -f frontend/test-results/auth-service.log || touch frontend/test-results/auth-service.log
 
       - name: Summarize Playwright failures
         if: always()
@@ -211,18 +254,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload Compose logs
+      - name: Upload service logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: compose-service-logs
-          path: frontend/test-results/compose-services.log
+          name: service-logs
+          path: |
+            frontend/test-results/compose-services.log
+            frontend/test-results/auth-service.log
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Stop docker services
+      - name: Stop services
         if: always()
-        run: docker compose -f infrastructure/docker-compose.yml down -v
+        run: |
+          pkill -f "backend/target/debug/virtual-table-auth" || true
+          docker compose -f infrastructure/docker-compose.yml down -v
 
   backend_checks:
     name: backend_checks

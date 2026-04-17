@@ -14,23 +14,25 @@ pnpm dev
 
 - `VITE_LIVEKIT_URL` (optional): explicit LiveKit WS URL. If omitted, the app uses `ws(s)://<current-host>:7880`.
 - `VITE_DEFAULT_ROOM` (optional): prefilled room value on join form (`dnd-table-1` by default).
-- `VITE_JOIN_KEY` (optional): prefilled join key value on join form.
 - `AUTH_SERVICE_URL` (dev proxy): auth backend base URL used by Vite dev server to proxy `/api/v1/*` (default `http://127.0.0.1:8787`).
 
-If `/api/v1/token` proxy requests fail with `ECONNREFUSED 127.0.0.1:8787`, the auth backend is down. In local Docker-based dev, rerun `pnpm compose:up` and make sure `infrastructure/.env` sets `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`.
+If `/api/v1/token` proxy requests fail with `ECONNREFUSED 127.0.0.1:8787`, the auth backend is down. In local Docker-based dev, rerun `pnpm compose:up` and make sure `infrastructure/.env` sets the auth values required by Google-backed sessions:
 
-## Simple Auth
+- `AUTH_BASE_URL`
+- `AUTH_COOKIE_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
 
-The home page now supports a small backend-owned auth flow:
+## Auth Flow
 
-- sign in with an allowlisted email
-- backend sets a signed session cookie
-- `/api/v1/token` returns `game_role` when that session exists
+The home page now uses the backend-owned Google session flow:
 
-This is a transition path, not the final OAuth flow:
-
-- email ownership is not verified yet
-- legacy join-key entry still works when no session is present
+- sign in with an allowlisted Google account
+- backend completes the Google callback and sets a signed session cookie
+- `/api/v1/token` derives identity server-side and returns `game_role` for the authenticated session
+- the home screen shows the auth-aware landing page, unauthorized users are routed to the unauthorized screen, and admins can manage access from the admin screen
 
 ## Multi-client local smoke test
 
@@ -52,13 +54,13 @@ export PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
 
 ```bash
 # default: 3 clients (Player1..Player3) in room dnd-table-1
-pnpm clients:start
+AUTH_DEV_LOGIN=1 pnpm clients:start
 
 # explicit names
-pnpm clients:start -- Alice Bob Carol
+AUTH_DEV_LOGIN=1 pnpm clients:start -- Alice Bob Carol
 
 # custom room and count
-ROOM=my-room CLIENT_COUNT=5 pnpm clients:start
+AUTH_DEV_LOGIN=1 ROOM=my-room CLIENT_COUNT=5 pnpm clients:start
 
 # close the spawned sessions
 pnpm clients:stop
@@ -67,6 +69,7 @@ pnpm clients:stop
 Notes:
 - Run the app locally (`pnpm dev`) before starting clients.
 - This launcher uses fake media devices and auto-grants mic/camera permissions to avoid prompt friction.
+- `AUTH_DEV_LOGIN=1` uses the backend's development-only login redirect, which must be enabled in the backend with `AUTH_ENABLE_DEV_LOGIN` set to any accepted truthy value: `1`, `true`, `TRUE`, `yes`, or `YES`.
 
 ## E2E
 
@@ -83,3 +86,4 @@ Optional:
 
 - `E2E_BASE_URL` (default `http://127.0.0.1:3100`)
 - `E2E_ROOM` (default `dnd-table-1`)
+- `E2E_EMAIL_DOMAIN` (default `example.com`)

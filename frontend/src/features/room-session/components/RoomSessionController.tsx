@@ -30,13 +30,12 @@ import {
 type RoomSessionControllerProps = {
   roomName: string;
   displayName: string;
-  joinKey?: string;
 };
 
-export function RoomSessionController({ roomName, displayName, joinKey }: RoomSessionControllerProps) {
+export function RoomSessionController({ roomName, displayName }: RoomSessionControllerProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const connection = useRoomConnection({ roomName, displayName, joinKey });
+  const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
   const participantIdentities = useMemo(() => {
     const version = connection.renderVersion;

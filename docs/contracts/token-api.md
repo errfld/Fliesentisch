@@ -4,23 +4,31 @@
 
 `POST /api/v1/token`
 
+Requires an authenticated backend session cookie created by the Google OAuth flow.
+
 ## Request
 
 ```json
 {
   "room": "dnd-table-1",
-  "identity": "alice",
-  "name": "Alice",
-  "join_key": "optional"
+  "name": "Alice"
 }
 ```
+
+Notes:
+
+- Derived server-side: `identity` comes from the authenticated Google user.
+- The returned `identity` is a stable opaque server-derived identifier, not the raw Google subject.
+- The API no longer accepts `join_key`.
 
 ## Response (200)
 
 ```json
 {
   "token": "jwt",
-  "expires_at": "2026-03-02T22:00:00Z"
+  "expires_at": "2026-03-02T22:00:00Z",
+  "identity": "u_h6v0X5Qh5R5A7o4rF0j6r7Q2C3e4m5n6p7q8",
+  "game_role": "player"
 }
 ```
 
@@ -31,7 +39,7 @@
 ```json
 {
   "error": {
-    "code": "INVALID_JOIN_KEY | ROOM_NOT_ALLOWED | BAD_REQUEST | INTERNAL",
+    "code": "UNAUTHENTICATED | ROOM_NOT_ALLOWED | FORBIDDEN | BAD_REQUEST | INTERNAL",
     "message": "human readable"
   }
 }
@@ -41,12 +49,8 @@
 
 - `200` token issued
 - `400` malformed request
-- `401` invalid join key
+- `401` missing or invalid backend session
 - `403` room not allowed
 - `500` unexpected failure
 
-## Transitional Note
-
-- When backend session auth is present, `game_role` is included in the token response.
-- When backend session auth is present, the minted LiveKit token also includes `attributes.game_role` so clients can verify trusted GM publishers over the realtime channel.
-- In the current transition phase, the endpoint still accepts legacy client identity and optional join-key flow when no authenticated session cookie is present.
+The minted LiveKit token also includes `attributes.game_role` so clients can verify trusted GM publishers over the realtime channel.

@@ -123,6 +123,7 @@ These values should be set once backend OAuth is wired up:
 - `AUTH_BOOTSTRAP_ADMIN_EMAILS`
 - `AUTH_BOOTSTRAP_GAMEMASTER_EMAILS`
 - `AUTH_BOOTSTRAP_PLAYER_EMAILS`
+- `AUTH_ENABLE_DEV_LOGIN` (optional, local automation only)
 
 ### Recommended values
 
@@ -157,6 +158,7 @@ Notes:
 - `AUTH_BASE_URL` should be the public origin users visit in the browser.
 - Do not point `AUTH_BASE_URL` at `http://auth:8787`.
 - Do not commit real Google client secrets.
+- `AUTH_ENABLE_DEV_LOGIN=true` is only for local Playwright or multi-client automation. Leave it disabled in production.
 
 ## Local Development Checklist
 
