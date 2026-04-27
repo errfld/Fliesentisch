@@ -9,7 +9,7 @@ axum-extra = { version = "0.12.5", features = ["cookie"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.38", features = ["clock", "serde"] }
 dotenvy = "0.15.7"
-hmac = "0.12.1"
+hmac = "0.13.0"
 http = "1.1.0"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 rand = "0.8.5"
