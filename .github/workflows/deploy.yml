@@ -37,13 +37,13 @@ jobs:
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
+          context: .
           file: ./frontend/Dockerfile
           push: true
           build-args: |
-            NEXT_PUBLIC_AUTH_URL=${{ secrets.NEXT_PUBLIC_AUTH_URL }}
-            NEXT_PUBLIC_LIVEKIT_URL=${{ secrets.NEXT_PUBLIC_LIVEKIT_URL }}
-            NEXT_PUBLIC_DEFAULT_ROOM=${{ secrets.NEXT_PUBLIC_DEFAULT_ROOM }}
+            VITE_LIVEKIT_URL=${{ secrets.VITE_LIVEKIT_URL }}
+            VITE_DEFAULT_ROOM=${{ secrets.VITE_DEFAULT_ROOM }}
+            VITE_JOIN_KEY=${{ secrets.VITE_JOIN_KEY }}
           tags: |
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:latest
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:${{ env.SHA_TAG }}
