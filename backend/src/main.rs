@@ -13,9 +13,9 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, TryRngCore};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -191,8 +191,8 @@ async fn start_google_login(
     jar: CookieJar,
     Query(params): Query<LoginQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let state_token = random_token(24);
-    let pkce_verifier = random_token(32);
+    let state_token = random_token(24)?;
+    let pkce_verifier = random_token(32)?;
     let next = sanitize_next_path(params.next.as_deref());
     let pkce_challenge = pkce_challenge(&pkce_verifier);
 
@@ -650,7 +650,7 @@ async fn create_session_cookie(
     jar: CookieJar,
     user: &AuthUser,
 ) -> Result<CookieJar, ApiError> {
-    let session_id = random_token(32);
+    let session_id = random_token(32)?;
     let expires_at = Utc::now() + Duration::seconds(state.config.session_ttl_seconds as i64);
     state
         .user_store
@@ -752,10 +752,13 @@ fn pkce_challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(digest)
 }
 
-fn random_token(num_bytes: usize) -> String {
+fn random_token(num_bytes: usize) -> Result<String, ApiError> {
     let mut bytes = vec![0_u8; num_bytes];
-    OsRng.fill_bytes(&mut bytes);
-    URL_SAFE_NO_PAD.encode(bytes)
+    OsRng.try_fill_bytes(&mut bytes).map_err(|err| {
+        error!("secure random generation failed: {err}");
+        ApiError::Internal
+    })?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
 fn derive_room_identity(secret: &str, google_subject: &str) -> Result<String, ApiError> {
@@ -1294,7 +1297,7 @@ mod tests {
             .authorize_google_user(email, subject, Some("Alice"))
             .await
             .unwrap();
-        let session_id = random_token(16);
+        let session_id = random_token(16).unwrap();
         state
             .user_store
             .create_session(&session_id, user.id, Utc::now() + Duration::hours(1))
