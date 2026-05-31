@@ -2,18 +2,24 @@ name: Build and Deploy
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    concurrency:
+      group: deploy-production-${{ github.repository }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     env:
       OWNER: ${{ github.repository_owner }}
-      SHA_TAG: ${{ github.sha }}
+      SHA_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -21,6 +27,8 @@ jobs:
       VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA_TAG }}
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -48,14 +56,43 @@ jobs:
           build-args: |
             VITE_LIVEKIT_URL=${{ secrets.VITE_LIVEKIT_URL }}
             VITE_DEFAULT_ROOM=${{ secrets.VITE_DEFAULT_ROOM }}
-            VITE_JOIN_KEY=${{ secrets.VITE_JOIN_KEY }}
           tags: |
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:latest
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:${{ env.SHA_TAG }}
 
       - name: Skip VPS deploy when secrets are missing
-        if: ${{ env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '' }}
-        run: echo "Skipping VPS deploy because one or more VPS secrets are not configured."
+        if: ${{ github.event_name == 'workflow_dispatch' && (env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '') }}
+        run: echo "Skipping manual VPS deploy because one or more VPS secrets are not configured."
+
+      - name: Fail automatic deploy when secrets are missing
+        if: ${{ github.event_name != 'workflow_dispatch' && (env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '') }}
+        run: |
+          echo "Required VPS deployment secrets are missing." >&2
+          exit 1
+
+      - name: Prepare VPS deploy directory
+        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          script: |
+            set -euo pipefail
+            test -w "${{ env.VPS_APP_DIR }}"
+            mkdir -p "${{ env.VPS_APP_DIR }}/infrastructure/caddy" "${{ env.VPS_APP_DIR }}/infrastructure/livekit"
+
+      - name: Upload VPS deploy files
+        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          target: ${{ env.VPS_APP_DIR }}
+          source: "infrastructure/docker-compose.vps.yml,infrastructure/caddy/Caddyfile,infrastructure/livekit/livekit.vps.yaml"
 
       - name: Deploy to VPS
         if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
@@ -67,8 +104,22 @@ jobs:
           port: ${{ env.VPS_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ env.VPS_APP_DIR }}
+            cd "${{ env.VPS_APP_DIR }}"
+            test -f infrastructure/.env
+            docker compose version
             export GITHUB_REPOSITORY_OWNER=${{ env.OWNER }}
             export IMAGE_TAG=${{ env.SHA_TAG }}
+            docker compose -f infrastructure/docker-compose.vps.yml config >/dev/null
             docker compose -f infrastructure/docker-compose.vps.yml pull
             docker compose -f infrastructure/docker-compose.vps.yml up -d --remove-orphans
+            for i in $(seq 1 60); do
+              if docker compose -f infrastructure/docker-compose.vps.yml exec -T frontend node -e "Promise.all([fetch('http://auth:8787/api/v1/health'), fetch('http://frontend:3000/')]).then(([auth, frontend]) => process.exit(auth.ok && frontend.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+                curl --fail --silent --show-error --max-time 20 "https://${{ env.VPS_HOST }}/" >/dev/null
+                curl --fail --silent --show-error --max-time 20 "https://${{ env.VPS_HOST }}/api/v1/health" >/dev/null
+                exit 0
+              fi
+              sleep 2
+            done
+            docker compose -f infrastructure/docker-compose.vps.yml ps
+            docker compose -f infrastructure/docker-compose.vps.yml logs --tail=100 auth frontend caddy livekit
+            exit 1

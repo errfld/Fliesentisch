@@ -1,10 +1,9 @@
-{
-  auto_https disable_redirects
-}
-
-:80 {
+{$CADDY_DOMAIN} {
   @auth_api path /api/v1*
   reverse_proxy @auth_api auth:8787
+
+  @livekit path /rtc*
+  reverse_proxy @livekit livekit:7880
 
   reverse_proxy frontend:3000
 }
