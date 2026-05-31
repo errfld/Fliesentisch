@@ -104,7 +104,9 @@ jobs:
             docker compose -f infrastructure/docker-compose.vps.yml pull
             docker compose -f infrastructure/docker-compose.vps.yml up -d --remove-orphans
             for i in $(seq 1 60); do
-              if docker compose -f infrastructure/docker-compose.vps.yml exec -T frontend node -e "Promise.all([fetch('http://auth:8787/api/v1/health'), fetch('http://caddy/', { headers: { Host: '${{ env.VPS_HOST }}' } })]).then(([auth, frontend]) => process.exit(auth.ok && frontend.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+              if docker compose -f infrastructure/docker-compose.vps.yml exec -T frontend node -e "Promise.all([fetch('http://auth:8787/api/v1/health'), fetch('http://frontend:3000/')]).then(([auth, frontend]) => process.exit(auth.ok && frontend.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+                curl --fail --silent --show-error --max-time 20 "https://${{ env.VPS_HOST }}/" >/dev/null
+                curl --fail --silent --show-error --max-time 20 "https://${{ env.VPS_HOST }}/api/v1/health" >/dev/null
                 exit 0
               fi
               sleep 2
