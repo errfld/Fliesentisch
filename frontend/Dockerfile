@@ -26,4 +26,4 @@ COPY --from=builder /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/frontend
 EXPOSE 3000
-CMD ["node", "node_modules/.bin/serve", "-s", "dist/client", "-l", "3000"]
+CMD ["node", "node_modules/serve/build/main.js", "-s", "dist/client", "-l", "3000"]
