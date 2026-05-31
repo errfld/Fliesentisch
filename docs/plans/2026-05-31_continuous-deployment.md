@@ -192,8 +192,8 @@ Implemented repo changes on `deploy/continuous-deployment`:
 This phase is complete.
 
 1. Manual `Build and Deploy` workflow run from `deploy/continuous-deployment` succeeded:
-   - run: `26718652626`
-   - deployed image SHA: `69edc3698d36f28abc2a339f41b92044fd1bfb4f`
+   - run: `26719696635`
+   - deployed image SHA: `b668257a15bac3c3ebac29a94f8e179fa4d2faf5`
 2. Public verification completed:
    - `https://fliesentisch.rsnfld.de/` serves the frontend over HTTPS.
    - `https://fliesentisch.rsnfld.de/api/v1/health` returns healthy JSON.
@@ -203,11 +203,20 @@ This phase is complete.
 
 ### Phase 5: Merge and continuous deployment verification
 
-1. PR opened from `deploy/continuous-deployment`: `#97`.
-2. Merge PR to `main`.
-3. Verify `CI` succeeds on `main`.
-4. Verify the `workflow_run` deployment automatically deploys the merge commit SHA.
-5. Verify the public app still passes the Phase 4 public behavior checks.
+This phase is complete.
+
+1. PR `#97` was squash-merged to `main`.
+2. `CI` on `main` succeeded:
+   - run: `26719844878`
+   - merge commit: `152d95e8b8588b0ea44cb735d8ef19d5cb2db0cd`
+3. Automatic `workflow_run` deployment from `main` succeeded:
+   - run: `26719904564`
+   - deployed image SHA: `152d95e8b8588b0ea44cb735d8ef19d5cb2db0cd`
+4. Public post-merge verification completed:
+   - `https://fliesentisch.rsnfld.de/` serves the frontend over HTTPS.
+   - `https://fliesentisch.rsnfld.de/api/v1/health` returns healthy JSON.
+   - Remote containers use the merge commit SHA-tagged `auth` and `frontend` images.
+   - Browser automation verified the unauthenticated landing page and Google sign-in link.
 
 ## Acceptance criteria
 
@@ -224,4 +233,4 @@ This phase is complete.
 
 ## Current status
 
-Manual production deployment from this branch is complete and verified. The server env exists with mode `600`, Compose validates against it, Caddy has a valid public certificate, the frontend and auth health endpoints are reachable over HTTPS, and the Google OAuth redirect starts with the correct production callback. The remaining automation verification is to merge PR `#97`, let `CI` complete on `main`, and confirm the `workflow_run` deployment deploys the merge commit automatically.
+Deployment is complete and automated. The server env exists with mode `600`, Compose validates against it, Caddy has a valid public certificate, the frontend and auth health endpoints are reachable over HTTPS, Google sign-in starts with the correct production callback, and the successful `main` CI run triggered an automatic deployment of merge commit `152d95e8b8588b0ea44cb735d8ef19d5cb2db0cd`.
