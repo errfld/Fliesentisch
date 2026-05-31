@@ -31,7 +31,7 @@ export default defineConfig({
     }
   },
   webServer: {
-    command: "pnpm dev --host 127.0.0.1 --port 3100",
+    command: "pnpm exec vite dev --host 127.0.0.1 --port 3100",
     url: baseURL,
     reuseExistingServer: false,
     stdout: "pipe",

@@ -92,7 +92,7 @@ jobs:
           key: ${{ env.VPS_SSH_KEY }}
           port: ${{ env.VPS_PORT }}
           target: ${{ env.VPS_APP_DIR }}
-          source: "infrastructure/docker-compose.vps.yml,infrastructure/caddy/Caddyfile,infrastructure/livekit/livekit.yaml"
+          source: "infrastructure/docker-compose.vps.yml,infrastructure/caddy/Caddyfile,infrastructure/livekit/livekit.vps.yaml"
 
       - name: Deploy to VPS
         if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}

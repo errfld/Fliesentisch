@@ -10,7 +10,7 @@ services:
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     volumes:
-      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+      - ./livekit/livekit.vps.yaml:/etc/livekit.yaml:ro
 
   auth:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/virtual-table-auth:${IMAGE_TAG:-latest}
