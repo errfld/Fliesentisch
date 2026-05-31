@@ -229,6 +229,6 @@ After Phase 1 server bootstrap and Phase 2/3 repo changes:
 - Secrets are not committed and are not printed in GitHub Actions logs.
 - Failed deploys fail the workflow and include bounded service diagnostics.
 
-## Current blocker
+## Current status
 
-Server bootstrap is complete. The remaining blocker for a real first deployment is the production server env file at `/opt/virtual-table/infrastructure/.env`; it must be created with real Google OAuth, LiveKit, bootstrap email, and cookie-secret values. A validation-only temporary env was used for `docker compose config` and then removed.
+Server bootstrap is complete. `/opt/virtual-table/infrastructure/.env` exists, is owned by `deploy:deploy`, has mode `600`, includes all required keys, and validates with `docker compose --env-file infrastructure/.env -f infrastructure/docker-compose.vps.yml config`. The next step is the first real deployment and public browser verification.
