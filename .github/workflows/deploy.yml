@@ -53,7 +53,6 @@ jobs:
           build-args: |
             VITE_LIVEKIT_URL=${{ secrets.VITE_LIVEKIT_URL }}
             VITE_DEFAULT_ROOM=${{ secrets.VITE_DEFAULT_ROOM }}
-            VITE_JOIN_KEY=${{ secrets.VITE_JOIN_KEY }}
           tags: |
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:latest
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:${{ env.SHA_TAG }}
