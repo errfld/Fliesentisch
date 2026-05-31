@@ -17,13 +17,17 @@ RUN pnpm build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=production HOME=/tmp
+RUN groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs --home-dir /app --shell /usr/sbin/nologin appuser \
+    && chown appuser:nodejs /app
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/frontend/node_modules ./frontend/node_modules
-COPY --from=builder /app/frontend/package.json ./frontend/package.json
-COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --chown=appuser:nodejs --from=builder /app/node_modules ./node_modules
+COPY --chown=appuser:nodejs --from=builder /app/frontend/node_modules ./frontend/node_modules
+COPY --chown=appuser:nodejs --from=builder /app/frontend/package.json ./frontend/package.json
+COPY --chown=appuser:nodejs --from=builder /app/frontend/dist ./frontend/dist
 
 WORKDIR /app/frontend
+USER appuser
 EXPOSE 3000
 CMD ["node", "node_modules/serve/build/main.js", "-s", "dist/client", "-l", "3000"]

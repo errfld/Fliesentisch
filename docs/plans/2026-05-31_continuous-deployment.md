@@ -18,7 +18,7 @@ Deploy the Virtual Table stack to the Hetzner machine at `fliesentisch.rsnfld.de
   - Docker Compose plugin is installed: Compose `v5.1.4`.
   - `deploy` is in the `docker` group and can run `docker ps` without sudo.
   - `/opt/virtual-table` and `/opt/virtual-table/infrastructure` are writable by `deploy`.
-  - passwordless sudo for `deploy` works.
+  - passwordless sudo for `deploy` has been removed; deploy automation uses SSH, Docker group membership, and `/opt/virtual-table` ownership only.
   - `er` does not have passwordless sudo.
   - UFW is active and allows OpenSSH, `80/tcp`, `443/tcp`, `7881/tcp`, and `50000:50100/udp` for IPv4 and IPv6.
 - GitHub repository secrets are configured:
@@ -34,9 +34,9 @@ Deploy the Virtual Table stack to the Hetzner machine at `fliesentisch.rsnfld.de
 - Caddyfile now uses `{$CADDY_DOMAIN}` instead of local-only `:80`.
 - Caddy now proxies `/rtc*` to `livekit:7880`, so `VITE_LIVEKIT_URL=wss://fliesentisch.rsnfld.de` has a LiveKit signaling route.
 - VPS Compose now supplies LiveKit server keys from `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` through `LIVEKIT_KEYS`; the static dev key was removed from `livekit.yaml`.
-- The deploy workflow now uploads deployment assets before applying Compose and performs in-network auth/frontend health checks.
+- The deploy workflow now uploads deployment assets before applying Compose and performs serialized, bounded health checks for internal auth/frontend readiness plus public HTTPS root and auth health endpoints.
 - Deployment assets have been copied to `/opt/virtual-table/infrastructure` on the server.
-- `docker compose -f infrastructure/docker-compose.vps.yml config` passes on the server with validation-only env values.
+- `docker compose -f infrastructure/docker-compose.vps.yml config` passes on the server with the production env file.
 
 ## Target state
 
@@ -167,53 +167,46 @@ Implemented repo changes on `deploy/continuous-deployment`:
 3. Check out the exact SHA being deployed.
 4. Copy required deployment files to `${{ secrets.VPS_APP_DIR }}` before running `docker compose`, so the server does not depend on a manually cloned repo.
 5. Gate automatic deployment behind successful `CI` completion on `main` via `workflow_run`; `workflow_dispatch` remains available for manual runs.
-6. Add remote preflight:
+6. Serialize production deployments with a stable GitHub Actions concurrency group and `cancel-in-progress: false`.
+7. Soft-skip missing VPS secrets only for manual dispatch; automatic deploys fail hard if required VPS secrets are absent.
+8. Add remote preflight:
    - verify `docker compose version`
    - verify `/opt/virtual-table` is writable
    - verify expected deployment files exist after sync
    - require server-local `infrastructure/.env`
-7. Add remote deploy steps:
+9. Add remote deploy steps:
    - `docker compose -f infrastructure/docker-compose.vps.yml config`
    - `docker compose -f infrastructure/docker-compose.vps.yml pull`
    - `docker compose -f infrastructure/docker-compose.vps.yml up -d --remove-orphans`
-8. Add health checks:
+10. Add health checks:
    - auth health via `http://auth:8787/api/v1/health`
-   - frontend/Caddy response via `http://caddy/` with host `fliesentisch.rsnfld.de`
-9. On failure, print bounded logs:
+   - frontend response via `http://frontend:3000/`
+   - public root via `https://fliesentisch.rsnfld.de/`
+   - public auth health via `https://fliesentisch.rsnfld.de/api/v1/health`
+11. On failure, print bounded logs:
    - `docker compose -f infrastructure/docker-compose.vps.yml ps`
    - recent logs for `caddy`, `frontend`, `auth`, and `livekit`
 
 ### Phase 4: First deploy execution
 
-After Phase 1 server bootstrap and Phase 2/3 repo changes:
+This phase is complete.
 
-1. Build images through GitHub Actions or manually dispatch deploy workflow from the branch if enabled.
-2. Create `/opt/virtual-table/infrastructure/.env` on the server with production values and mode `600`:
-
-   ```bash
-   ssh deploy@fliesentisch.rsnfld.de 'install -d -m 700 /opt/virtual-table/infrastructure && touch /opt/virtual-table/infrastructure/.env && chmod 600 /opt/virtual-table/infrastructure/.env'
-   ```
-
-3. Run compose config validation on the server:
-
-   ```bash
-   ssh deploy@fliesentisch.rsnfld.de 'cd /opt/virtual-table && docker compose -f infrastructure/docker-compose.vps.yml config'
-   ```
-
-4. Run the deploy.
-5. Verify public behavior:
-   - `https://fliesentisch.rsnfld.de/` loads.
-   - `https://fliesentisch.rsnfld.de/api/v1/health` returns healthy.
-   - Google login/session flow works.
-   - Token issuance works.
-   - A browser can join `dnd-table-1` through LiveKit.
+1. Manual `Build and Deploy` workflow run from `deploy/continuous-deployment` succeeded:
+   - run: `26718652626`
+   - deployed image SHA: `69edc3698d36f28abc2a339f41b92044fd1bfb4f`
+2. Public verification completed:
+   - `https://fliesentisch.rsnfld.de/` serves the frontend over HTTPS.
+   - `https://fliesentisch.rsnfld.de/api/v1/health` returns healthy JSON.
+   - Browser automation verified the unauthenticated landing page and Google sign-in link.
+   - Browser automation verified Google OAuth redirects to `accounts.google.com` with callback `https://fliesentisch.rsnfld.de/api/v1/auth/google/callback`.
+3. Deployed containers are running on the server from the SHA-tagged images.
 
 ### Phase 5: Merge and continuous deployment verification
 
-1. Open PR from `deploy/continuous-deployment`.
-2. Ensure CI is green.
-3. Merge to `main`.
-4. Verify the deployment workflow deploys the merge commit SHA.
+1. PR opened from `deploy/continuous-deployment`: `#97`.
+2. Merge PR to `main`.
+3. Verify `CI` succeeds on `main`.
+4. Verify the `workflow_run` deployment automatically deploys the merge commit SHA.
 5. Verify the public app still passes the Phase 4 public behavior checks.
 
 ## Acceptance criteria
@@ -231,4 +224,4 @@ After Phase 1 server bootstrap and Phase 2/3 repo changes:
 
 ## Current status
 
-Server bootstrap is complete. `/opt/virtual-table/infrastructure/.env` exists, is owned by `deploy:deploy`, has mode `600`, includes all required keys, and validates with `docker compose --env-file infrastructure/.env -f infrastructure/docker-compose.vps.yml config`. The next step is the first real deployment and public browser verification.
+Manual production deployment from this branch is complete and verified. The server env exists with mode `600`, Compose validates against it, Caddy has a valid public certificate, the frontend and auth health endpoints are reachable over HTTPS, and the Google OAuth redirect starts with the correct production callback. The remaining automation verification is to merge PR `#97`, let `CI` complete on `main`, and confirm the `workflow_run` deployment deploys the merge commit automatically.

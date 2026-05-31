@@ -10,6 +10,9 @@ on:
 jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    concurrency:
+      group: deploy-production-${{ github.repository }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,8 +61,14 @@ jobs:
             ghcr.io/${{ env.OWNER }}/virtual-table-frontend:${{ env.SHA_TAG }}
 
       - name: Skip VPS deploy when secrets are missing
-        if: ${{ env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '' }}
-        run: echo "Skipping VPS deploy because one or more VPS secrets are not configured."
+        if: ${{ github.event_name == 'workflow_dispatch' && (env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '') }}
+        run: echo "Skipping manual VPS deploy because one or more VPS secrets are not configured."
+
+      - name: Fail automatic deploy when secrets are missing
+        if: ${{ github.event_name != 'workflow_dispatch' && (env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '') }}
+        run: |
+          echo "Required VPS deployment secrets are missing." >&2
+          exit 1
 
       - name: Prepare VPS deploy directory
         if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
