@@ -2,18 +2,21 @@ name: Build and Deploy
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     env:
       OWNER: ${{ github.repository_owner }}
-      SHA_TAG: ${{ github.sha }}
+      SHA_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
       VPS_HOST: ${{ secrets.VPS_HOST }}
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -21,6 +24,8 @@ jobs:
       VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA_TAG }}
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -57,6 +62,33 @@ jobs:
         if: ${{ env.VPS_HOST == '' || env.VPS_USER == '' || env.VPS_SSH_KEY == '' || env.VPS_APP_DIR == '' }}
         run: echo "Skipping VPS deploy because one or more VPS secrets are not configured."
 
+      - name: Prepare VPS deploy directory
+        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          script: |
+            set -euo pipefail
+            test -w "${{ env.VPS_APP_DIR }}"
+            mkdir -p "${{ env.VPS_APP_DIR }}/infrastructure/caddy" "${{ env.VPS_APP_DIR }}/infrastructure/livekit"
+
+      - name: Upload VPS deploy files
+        if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ env.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          target: ${{ env.VPS_APP_DIR }}
+          source: |
+            infrastructure/docker-compose.vps.yml
+            infrastructure/caddy/Caddyfile
+            infrastructure/livekit/livekit.yaml
+
       - name: Deploy to VPS
         if: ${{ env.VPS_HOST != '' && env.VPS_USER != '' && env.VPS_SSH_KEY != '' && env.VPS_APP_DIR != '' }}
         uses: appleboy/ssh-action@v1.2.0
@@ -67,8 +99,20 @@ jobs:
           port: ${{ env.VPS_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ env.VPS_APP_DIR }}
+            cd "${{ env.VPS_APP_DIR }}"
+            test -f infrastructure/.env
+            docker compose version
             export GITHUB_REPOSITORY_OWNER=${{ env.OWNER }}
             export IMAGE_TAG=${{ env.SHA_TAG }}
+            docker compose -f infrastructure/docker-compose.vps.yml config >/dev/null
             docker compose -f infrastructure/docker-compose.vps.yml pull
             docker compose -f infrastructure/docker-compose.vps.yml up -d --remove-orphans
+            for i in $(seq 1 60); do
+              if docker compose -f infrastructure/docker-compose.vps.yml exec -T frontend node -e "Promise.all([fetch('http://auth:8787/api/v1/health'), fetch('http://caddy/', { headers: { Host: '${{ env.VPS_HOST }}' } })]).then(([auth, frontend]) => process.exit(auth.ok && frontend.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+                exit 0
+              fi
+              sleep 2
+            done
+            docker compose -f infrastructure/docker-compose.vps.yml ps
+            docker compose -f infrastructure/docker-compose.vps.yml logs --tail=100 auth frontend caddy livekit
+            exit 1

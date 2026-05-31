@@ -7,6 +7,8 @@ services:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
     volumes:
       - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
 
@@ -17,16 +19,25 @@ services:
       - .env
     environment:
       AUTH_BIND_ADDR: ${AUTH_BIND_ADDR:-0.0.0.0:8787}
+      AUTH_BASE_URL: ${AUTH_BASE_URL}
+      AUTH_COOKIE_SECRET: ${AUTH_COOKIE_SECRET}
       AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:-sqlite:///app/data/auth.db?mode=rwc}
+      AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-1209600}
       AUTH_BOOTSTRAP_ADMIN_EMAILS: ${AUTH_BOOTSTRAP_ADMIN_EMAILS:-}
       AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: ${AUTH_BOOTSTRAP_GAMEMASTER_EMAILS:-}
       AUTH_BOOTSTRAP_PLAYER_EMAILS: ${AUTH_BOOTSTRAP_PLAYER_EMAILS:-}
+      AUTH_ENABLE_DEV_LOGIN: ${AUTH_ENABLE_DEV_LOGIN:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
       ALLOWED_ROOMS: ${ALLOWED_ROOMS:-dnd-table-1}
+      TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-3600}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS}
     volumes:
       - auth_data:/app/data
+    depends_on:
+      - livekit
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/virtual-table-frontend:${IMAGE_TAG:-latest}
@@ -35,13 +46,17 @@ services:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth:8787}
       VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL}
       VITE_DEFAULT_ROOM: ${VITE_DEFAULT_ROOM:-dnd-table-1}
-
+    depends_on:
+      - auth
+      - livekit
   caddy:
     image: caddy:2.8.4
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
