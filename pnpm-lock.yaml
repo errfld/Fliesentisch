@@ -52,8 +52,8 @@ importers:
         specifier: ^14.2.5
         version: 14.2.6
       tailwindcss:
-        specifier: ^4.2.2
-        version: 4.2.2
+        specifier: ^4.3.0
+        version: 4.3.0
       zustand:
         specifier: ^5.0.12
         version: 5.0.12(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -2056,6 +2056,11 @@ packages:
     engines: {node: '>=20.16.0'}
     hasBin: true
 
+  srvx@0.11.16:
+    resolution: {integrity: sha512-bp07zRuycfTY43IjAvvTFnmnJi8ikW0VFiHwOhhYcVW/L4xQ1XY4PAd4Nuum1rsA17C39zL7x+CDhrn5AL32Rw==}
+    engines: {node: '>=20.16.0'}
+    hasBin: true
+
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
@@ -2099,6 +2104,9 @@ packages:
 
   tailwindcss@4.2.2:
     resolution: {integrity: sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q==}
+
+  tailwindcss@4.3.0:
+    resolution: {integrity: sha512-y6nxMGB1nMW9R6k96e5gdIFzcfL/gTJRNaqGes1YvkLnPVXzWgbqFF2yLC0T8G774n24cx3Pe8XrKoniCOAH+Q==}
 
   tapable@2.3.2:
     resolution: {integrity: sha512-1MOpMXuhGzGL5TTCZFItxCc0AARf1EZFQkGqMm7ERKj8+Hgr5oLvJOVFcC+lRmR8hCe2S3jC4T5D7Vg/d7/fhA==}
@@ -3841,7 +3849,7 @@ snapshots:
   h3@2.0.1-rc.20:
     dependencies:
       rou3: 0.8.1
-      srvx: 0.11.15
+      srvx: 0.11.16
 
   has-flag@4.0.0: {}
 
@@ -4306,6 +4314,8 @@ snapshots:
 
   srvx@0.11.15: {}
 
+  srvx@0.11.16: {}
+
   stackback@0.0.2: {}
 
   std-env@4.1.0: {}
@@ -4345,6 +4355,8 @@ snapshots:
   symbol-tree@3.2.4: {}
 
   tailwindcss@4.2.2: {}
+
+  tailwindcss@4.3.0: {}
 
   tapable@2.3.2: {}
 

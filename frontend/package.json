@@ -27,7 +27,7 @@
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "serve": "^14.2.5",
-    "tailwindcss": "^4.2.2",
+    "tailwindcss": "^4.3.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
