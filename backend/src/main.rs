@@ -15,7 +15,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
 use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use rand::{rngs::OsRng, TryRngCore};
+use rand::{rngs::SysRng, TryRng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -754,7 +754,7 @@ fn pkce_challenge(verifier: &str) -> String {
 
 fn random_token(num_bytes: usize) -> Result<String, ApiError> {
     let mut bytes = vec![0_u8; num_bytes];
-    OsRng.try_fill_bytes(&mut bytes).map_err(|err| {
+    SysRng.try_fill_bytes(&mut bytes).map_err(|err| {
         error!("secure random generation failed: {err}");
         ApiError::Internal
     })?;
