@@ -6,6 +6,7 @@ import {
   filterAudioTracksForSplitView,
   filterParticipantIdentitiesForSplitView,
   orderGridTiles,
+  resolveParticipantLabel,
   resolveParticipantRoomId
 } from "@/features/room-session/lib/session-selectors";
 import type { AudioTrackModel, VideoTileModel } from "@/features/room-session/types";
@@ -36,6 +37,26 @@ describe("room session selectors", () => {
         updatedAt: 1
       })
     ).toBe("Whisper abcdef");
+  });
+
+  it("uses chosen display names for participant roster labels", () => {
+    const roster = buildParticipantRoster({
+      participantIdentities: ["u_alice", "u_bob"],
+      participantDisplayNames: new Map([
+        ["u_alice", "Alice the Brave"],
+        ["u_bob", "Bobby Tables"]
+      ]),
+      identity: "u_alice",
+      activeSpeakers: new Set(),
+      videoTiles: [],
+      activeWhispers: []
+    });
+
+    expect(roster.map((participant) => participant.label)).toEqual(["Alice the Brave", "Bobby Tables"]);
+  });
+
+  it("falls back to formatted identities when display names are unavailable", () => {
+    expect(resolveParticipantLabel("alice-the-brave-abc123def456", new Map())).toBe("Alice The Brave");
   });
 
   it("sorts the participant roster by spotlight then local identity", () => {

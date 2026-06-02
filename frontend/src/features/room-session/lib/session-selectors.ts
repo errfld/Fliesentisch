@@ -86,8 +86,50 @@ export function buildAudioTracks(room: Room | null): AudioTrackModel[] {
   return tracks;
 }
 
+export function buildParticipantDisplayNames(
+  room: Room | null,
+  localIdentity: string,
+  localDisplayName: string
+): Map<string, string> {
+  const displayNames = new Map<string, string>();
+  addDisplayName(displayNames, localIdentity, localDisplayName);
+
+  if (!room) {
+    return displayNames;
+  }
+
+  addDisplayName(
+    displayNames,
+    room.localParticipant.identity || localIdentity,
+    room.localParticipant.name || localDisplayName
+  );
+  room.remoteParticipants.forEach((participant) => {
+    addDisplayName(displayNames, participant.identity, participant.name);
+  });
+
+  return displayNames;
+}
+
+export function resolveParticipantLabel(
+  identity: string,
+  participantDisplayNames?: ReadonlyMap<string, string>
+): string {
+  const displayName = participantDisplayNames?.get(identity);
+  return displayName && displayName.length > 0 ? displayName : formatIdentityLabel(identity);
+}
+
+function addDisplayName(displayNames: Map<string, string>, identity: string | undefined, displayName: string | undefined) {
+  const trimmedDisplayName = displayName?.trim();
+  if (!identity || !trimmedDisplayName) {
+    return;
+  }
+
+  displayNames.set(identity, trimmedDisplayName);
+}
+
 type BuildParticipantRosterInput = {
   participantIdentities: string[];
+  participantDisplayNames?: ReadonlyMap<string, string>;
   identity: string;
   activeSpeakers: Set<string>;
   videoTiles: VideoTileModel[];
@@ -97,6 +139,7 @@ type BuildParticipantRosterInput = {
 
 export function buildParticipantRoster({
   participantIdentities,
+  participantDisplayNames,
   identity,
   activeSpeakers,
   videoTiles,
@@ -108,7 +151,7 @@ export function buildParticipantRoster({
       const whisper = activeWhispers.find((entry) => entry.members.includes(participantIdentity));
       return {
         identity: participantIdentity,
-        label: formatIdentityLabel(participantIdentity),
+        label: resolveParticipantLabel(participantIdentity, participantDisplayNames),
         isLocal: participantIdentity === identity,
         isSpotlight: participantIdentity === spotlightIdentity,
         isSpeaking: activeSpeakers.has(participantIdentity),

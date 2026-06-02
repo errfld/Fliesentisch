@@ -5,6 +5,7 @@ import { DevicePanel } from "@/features/room-session/components/DevicePanel";
 import { ParticipantRoster } from "@/features/room-session/components/ParticipantRoster";
 import { RemoteAudioLayer } from "@/features/room-session/components/RemoteAudioLayer";
 import { RoomSessionLayout } from "@/features/room-session/components/RoomSessionLayout";
+import { RoomSessionState } from "@/features/room-session/components/RoomSessionState";
 import { RoomTopBar } from "@/features/room-session/components/RoomTopBar";
 import { SessionSidebar } from "@/features/room-session/components/SessionSidebar";
 import { SplitControlPanel } from "@/features/room-session/components/SplitControlPanel";
@@ -13,9 +14,9 @@ import { VideoGrid } from "@/features/room-session/components/VideoGrid";
 import { WhisperPanel } from "@/features/room-session/components/WhisperPanel";
 import { useRoomConnection } from "@/features/room-session/hooks/useRoomConnection";
 import { useRoomMedia } from "@/features/room-session/hooks/useRoomMedia";
+import { useRoomParticipants } from "@/features/room-session/hooks/useRoomParticipants";
 import { useSplitRoomSession } from "@/features/room-session/hooks/useSplitRoomSession";
 import { useWhisperSession } from "@/features/room-session/hooks/useWhisperSession";
-import { formatIdentityLabel } from "@/features/room-session/lib/session-helpers";
 import {
   buildAudioTracks,
   buildParticipantRoster,
@@ -24,6 +25,7 @@ import {
   filterParticipantIdentitiesForSplitView,
   filterVideoTilesForSplitView,
   orderGridTiles,
+  resolveParticipantLabel,
   resolveParticipantRoomId
 } from "@/features/room-session/lib/session-selectors";
 
@@ -37,18 +39,12 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
 
   const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
-  const participantIdentities = useMemo(() => {
-    const version = connection.renderVersion;
-    void version;
-
-    if (!connection.identity) {
-      return connection.room ? Array.from(connection.room.remoteParticipants.keys()) : [];
-    }
-
-    return Array.from(
-      new Set([connection.identity, ...Array.from(connection.room?.remoteParticipants.keys() ?? [])])
-    );
-  }, [connection.identity, connection.renderVersion, connection.room]);
+  const { participantDisplayNames, participantIdentities } = useRoomParticipants({
+    room: connection.room,
+    identity: connection.identity,
+    renderVersion: connection.renderVersion,
+    displayName
+  });
   const splitSession = useSplitRoomSession({
     room: connection.room,
     identity: connection.identity,
@@ -134,6 +130,7 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
     () =>
       buildParticipantRoster({
         participantIdentities: visibleParticipantIdentities,
+        participantDisplayNames,
         identity: connection.identity,
         activeSpeakers: connection.activeSpeakers,
         videoTiles: visibleVideoTiles,
@@ -143,6 +140,7 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
     [
       connection.activeSpeakers,
       connection.identity,
+      participantDisplayNames,
       visibleParticipantIdentities,
       visibleVideoTiles,
       whisperSession.activeWhispers,
@@ -159,7 +157,7 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
       participantIdentities
         .map((participantIdentity) => ({
           identity: participantIdentity,
-          label: formatIdentityLabel(participantIdentity),
+          label: resolveParticipantLabel(participantIdentity, participantDisplayNames),
           isLocal: participantIdentity === connection.identity,
           roomId: resolveParticipantRoomId(splitSession.splitState, participantIdentity)
         }))
@@ -181,7 +179,7 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
           }
           return left.label.localeCompare(right.label);
         }),
-    [connection.identity, participantIdentities, splitSession.splitState]
+    [connection.identity, participantDisplayNames, participantIdentities, splitSession.splitState]
   );
   const splitPanel =
     splitSession.canManageSplitRooms || splitSession.isActive || splitSession.notice ? (
@@ -212,33 +210,15 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
     ) : undefined;
 
   if (isConnecting) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
-        <div className="text-center">
-          <p className="display-face text-xl text-[var(--c-text-warm)]">Entering the table</p>
-          <p className="mt-3 text-sm text-[var(--c-text-dim)]">Connecting to room...</p>
-        </div>
-      </div>
-    );
+    return <RoomSessionState title="Entering the table" message="Connecting to room..." />;
   }
 
   if (error) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
-        <div className="max-w-md text-center">
-          <p className="display-face text-xl text-[var(--c-ember)]">Connection Failed</p>
-          <p className="mt-3 text-sm text-[var(--c-text-dim)]">{error}</p>
-        </div>
-      </div>
-    );
+    return <RoomSessionState title="Connection Failed" message={error} tone="error" />;
   }
 
   if (!connection.room) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[var(--c-void)]">
-        <p className="text-sm text-[var(--c-text-dim)]">Room is not connected.</p>
-      </div>
-    );
+    return <RoomSessionState message="Room is not connected." />;
   }
 
   return (
@@ -270,6 +250,7 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
           gridCount={Math.min(gridTiles.length, 12)}
           spotlightIdentity={whisperSession.spotlightIdentity}
           activeSpeakers={connection.activeSpeakers}
+          participantDisplayNames={participantDisplayNames}
           selectedParticipantIds={whisperSession.selectedParticipantIds}
           mirrorSelfView={media.mirrorSelfView}
           onToggleParticipantSelection={whisperSession.toggleParticipantSelection}
