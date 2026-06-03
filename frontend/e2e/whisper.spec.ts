@@ -39,7 +39,7 @@ async function openParticipant(browser: Browser, room: string, displayName: stri
   return { context, page, identity };
 }
 
-async function expectRosterName(page: Page, displayName: string, identity: string): Promise<void> {
+async function expectRosterName(page: Page, identity: string, displayName: string): Promise<void> {
   const roster = page.getByTestId("participant-roster");
   await expect(roster).toContainText(displayName);
   await expect(roster).not.toContainText(identity);
@@ -102,8 +102,8 @@ test.describe("whisper multi-client flows", () => {
 
     try {
       await Promise.all([
-        expectRosterName(alice.page, "Alice", alice.identity),
-        expectRosterName(bob.page, "Bob", bob.identity)
+        expectRosterName(alice.page, alice.identity, "Alice"),
+        expectRosterName(bob.page, bob.identity, "Bob")
       ]);
       await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
       await Promise.all([
@@ -114,8 +114,8 @@ test.describe("whisper multi-client flows", () => {
       ]);
 
       await Promise.all([
-        expectRosterName(alice.page, "Bob", bob.identity),
-        expectRosterName(bob.page, "Alice", alice.identity),
+        expectRosterName(alice.page, bob.identity, "Bob"),
+        expectRosterName(bob.page, alice.identity, "Alice"),
         expectVideoTileName(alice.page, alice.identity, "Alice"),
         expectVideoTileName(alice.page, bob.identity, "Bob"),
         expectVideoTileName(bob.page, alice.identity, "Alice"),

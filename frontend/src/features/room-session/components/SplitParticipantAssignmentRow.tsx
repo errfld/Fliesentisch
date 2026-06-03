@@ -26,6 +26,7 @@ export function SplitParticipantAssignmentRow({
 }: SplitParticipantAssignmentRowProps) {
   const assignedRoomId = resolveParticipantRoomId(splitState, participant.identity);
   const assignedRoomName = rooms.find((room) => room.id === assignedRoomId)?.name ?? "Main Table";
+  const isGm = isPinnedToGmRole || participant.identity === splitState.gmIdentity;
 
   return (
     <div className="rounded-md border border-[var(--c-rule)] bg-[color-mix(in_srgb,var(--c-ink)_68%,black)] px-3 py-3">
@@ -33,14 +34,14 @@ export function SplitParticipantAssignmentRow({
         <span className="truncate text-[var(--c-text)]">
           {participant.label}
           {participant.isLocal ? <span className="ml-1 text-[var(--c-text-faint)]">(you)</span> : null}
-          {participant.identity === splitState.gmIdentity ? <span className="ml-1 text-[var(--c-gold)]">GM</span> : null}
+          {isGm ? <span className="ml-1 text-[var(--c-gold)]">GM</span> : null}
         </span>
-        {participant.identity !== splitState.gmIdentity ? (
+        {!isGm ? (
           <span className="shrink-0 text-[var(--c-text-faint)]">{assignedRoomName}</span>
         ) : null}
       </div>
 
-      {isPinnedToGmRole ? (
+      {isGm ? (
         <p className="mt-3 text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-faint)]">
           GM is globally visible across all rooms
         </p>
