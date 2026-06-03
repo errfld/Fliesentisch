@@ -39,6 +39,18 @@ async function openParticipant(browser: Browser, room: string, displayName: stri
   return { context, page, identity };
 }
 
+async function expectRosterName(page: Page, identity: string, displayName: string): Promise<void> {
+  const roster = page.getByTestId("participant-roster");
+  await expect(roster).toContainText(displayName);
+  await expect(roster).not.toContainText(identity);
+}
+
+async function expectVideoTileName(page: Page, identity: string, displayName: string): Promise<void> {
+  const tileLabel = localTile(page, identity).getByTestId("video-tile-label");
+  await expect(tileLabel).toContainText(displayName);
+  await expect(tileLabel).not.toContainText(identity);
+}
+
 async function ensureCameraOn(page: Page): Promise<void> {
   const cameraButton = page.getByRole("button", { name: /Camera (On|Off)/ });
   await expect(cameraButton).toBeVisible();
@@ -84,6 +96,37 @@ async function whisperCardForMember(page: Page, memberIdentity: string) {
 }
 
 test.describe("whisper multi-client flows", () => {
+  test("renders chosen display names in roster and video tiles", async ({ browser }) => {
+    const alice = await openParticipant(browser, TEST_ROOM, "Alice");
+    const bob = await openParticipant(browser, TEST_ROOM, "Bob");
+
+    try {
+      await Promise.all([
+        expectRosterName(alice.page, alice.identity, "Alice"),
+        expectRosterName(bob.page, bob.identity, "Bob")
+      ]);
+      await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
+      await Promise.all([
+        waitForVideoPlayback(alice.page, alice.identity),
+        waitForVideoPlayback(alice.page, bob.identity),
+        waitForVideoPlayback(bob.page, alice.identity),
+        waitForVideoPlayback(bob.page, bob.identity)
+      ]);
+
+      await Promise.all([
+        expectRosterName(alice.page, bob.identity, "Bob"),
+        expectRosterName(bob.page, alice.identity, "Alice"),
+        expectVideoTileName(alice.page, alice.identity, "Alice"),
+        expectVideoTileName(alice.page, bob.identity, "Bob"),
+        expectVideoTileName(bob.page, alice.identity, "Alice"),
+        expectVideoTileName(bob.page, bob.identity, "Bob")
+      ]);
+    } finally {
+      await alice.context.close();
+      await bob.context.close();
+    }
+  });
+
   test("toggles mirrored self-view from the device panel and persists it on reload", async ({ browser }) => {
     const alice = await openParticipant(browser, TEST_ROOM, "Alice");
 

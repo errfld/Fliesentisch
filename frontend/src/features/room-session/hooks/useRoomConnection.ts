@@ -160,6 +160,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
       RoomEvent.ParticipantConnected,
       RoomEvent.ParticipantDisconnected,
       RoomEvent.TrackPublished,
+      RoomEvent.ParticipantNameChanged,
       RoomEvent.TrackUnpublished,
       RoomEvent.TrackSubscribed,
       RoomEvent.TrackUnsubscribed,

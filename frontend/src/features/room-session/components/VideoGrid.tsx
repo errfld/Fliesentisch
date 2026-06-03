@@ -1,11 +1,13 @@
 import type { VideoTileModel } from "@/features/room-session/types";
 import { VideoTile } from "@/features/room-session/components/VideoTile";
+import { resolveParticipantLabel } from "@/features/room-session/lib/session-selectors";
 
 type VideoGridProps = {
   gridTiles: VideoTileModel[];
   gridCount: number;
   spotlightIdentity?: string;
   activeSpeakers: Set<string>;
+  participantDisplayNames: ReadonlyMap<string, string>;
   selectedParticipantIds: Set<string>;
   mirrorSelfView: boolean;
   onToggleParticipantSelection: (participantIdentity: string) => void;
@@ -17,6 +19,7 @@ export function VideoGrid({
   gridCount,
   spotlightIdentity,
   activeSpeakers,
+  participantDisplayNames,
   selectedParticipantIds,
   mirrorSelfView,
   onToggleParticipantSelection,
@@ -35,6 +38,7 @@ export function VideoGrid({
               isActiveSpeaker={activeSpeakers.has(tile.identity)}
               isSelectedForInvite={!tile.isLocal && selectedParticipantIds.has(tile.identity)}
               mirrorSelfView={mirrorSelfView}
+              participantLabel={resolveParticipantLabel(tile.identity, participantDisplayNames)}
               onToggleParticipantSelection={onToggleParticipantSelection}
               onToggleSpotlight={onToggleSpotlight}
             />

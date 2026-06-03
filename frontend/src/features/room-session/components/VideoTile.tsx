@@ -1,10 +1,10 @@
 import { TrackElement } from "@/components/TrackElement";
-import { formatIdentityLabel } from "@/features/room-session/lib/session-helpers";
 import type { VideoTileModel } from "@/features/room-session/types";
 
 type VideoTileProps = {
   tile: VideoTileModel;
   index: number;
+  participantLabel: string;
   isSpotlighted: boolean;
   isActiveSpeaker: boolean;
   isSelectedForInvite: boolean;
@@ -16,6 +16,7 @@ type VideoTileProps = {
 export function VideoTile({
   tile,
   index,
+  participantLabel,
   isSpotlighted,
   isActiveSpeaker,
   isSelectedForInvite,
@@ -52,8 +53,8 @@ export function VideoTile({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <div className="min-w-0">
-          <p className="display-face truncate text-sm leading-tight text-white/90">
-            {formatIdentityLabel(tile.identity)}
+          <p className="display-face truncate text-sm leading-tight text-white/90" data-testid="video-tile-label">
+            {participantLabel}
             {tile.isLocal ? " (you)" : ""}
           </p>
           {isActiveSpeaker && <p className="mt-0.5 text-[10px] text-[var(--c-emerald)]">Speaking</p>}

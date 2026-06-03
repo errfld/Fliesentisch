@@ -7,7 +7,7 @@ type ParticipantRosterProps = {
 
 export function ParticipantRoster({ participantRoster, title = "AT TABLE" }: ParticipantRosterProps) {
   return (
-    <div className="px-5 pt-4 pb-4">
+    <div className="px-5 pt-4 pb-4" data-testid="participant-roster">
       <h3 className="display-face text-xs tracking-[0.08em] text-[var(--c-text-warm)]">{title}</h3>
       <div className="mt-3">
         {participantRoster.map((participant, index) => (
