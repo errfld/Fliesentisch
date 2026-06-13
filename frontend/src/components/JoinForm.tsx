@@ -27,10 +27,10 @@ export function JoinForm({ initialName = "" }: JoinFormProps) {
 
   return (
     <section className="w-full max-w-sm">
-      <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--c-text-faint)]">Enter the room</p>
-      <h1 className="display-face mt-2 text-2xl text-[var(--c-text-warm)]">Join the table</h1>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--c-text-faint)]">Almost there</p>
+      <h1 className="display-face mt-2 text-2xl text-[var(--c-text-warm)]">Join the room</h1>
       <p className="mt-3 text-sm leading-relaxed text-[var(--c-text-dim)]">
-        Choose the nickname your group knows you by and step into the room. Whispers and spotlight stay inside.
+        Pick the name we'll recognize. Leave the room as-is unless someone gave you a different one.
       </p>
       <form className="mt-8 space-y-6" onSubmit={onSubmit}>
         <label className="block text-[10px] uppercase tracking-[0.06em] text-[var(--c-text-dim)]">
