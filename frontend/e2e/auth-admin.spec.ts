@@ -14,9 +14,9 @@ function devLoginUrl(email: string, next: string, name: string): string {
 test("home page requires sign-in before join form is shown", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Enter through Google" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Use your game account" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Continue with Google" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Join the table" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Join the room" })).toHaveCount(0);
 });
 
 test("admin can manage users and non-admin is blocked from the admin console", async ({ browser }) => {
