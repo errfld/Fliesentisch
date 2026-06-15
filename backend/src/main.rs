@@ -1,3 +1,4 @@
+mod config;
 mod users;
 
 use axum::{
@@ -13,13 +14,14 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
+use config::AppConfig;
 use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::{rngs::SysRng, TryRng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, env, net::SocketAddr, sync::Arc, time::Duration as StdDuration};
+use std::{net::SocketAddr, sync::Arc, time::Duration as StdDuration};
 use thiserror::Error;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
@@ -27,10 +29,7 @@ use tower_http::{
 };
 use tracing::{error, info};
 use url::Url;
-use users::{
-    build_bootstrap_users, AuthUser, BootstrapUser, GameRole, NewUser, PlatformRole, StoreError,
-    UserPatch, UserStore,
-};
+use users::{AuthUser, GameRole, NewUser, PlatformRole, StoreError, UserPatch, UserStore};
 
 const SESSION_COOKIE_NAME: &str = "vt_session";
 const OAUTH_STATE_COOKIE_NAME: &str = "vt_oauth_state";
@@ -39,7 +38,6 @@ const OAUTH_NEXT_COOKIE_NAME: &str = "vt_oauth_next";
 const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
-const GOOGLE_CALLBACK_PATH: &str = "/api/v1/auth/google/callback";
 const UNAUTHORIZED_PATH: &str = "/auth/unauthorized";
 const DEFAULT_AUTH_REDIRECT: &str = "/";
 const MAX_DISPLAY_NAME_LENGTH: usize = 48;
@@ -812,180 +810,6 @@ struct AppState {
     user_store: UserStore,
 }
 
-#[derive(Debug, Clone)]
-struct AppConfig {
-    bind_addr: String,
-    database_url: String,
-    bootstrap_users: Vec<BootstrapUser>,
-    livekit_api_key: String,
-    livekit_api_secret: String,
-    google_client_id: String,
-    google_client_secret: String,
-    google_redirect_uri: String,
-    auth_base_url: Url,
-    cookie_secret: String,
-    allowed_rooms: Option<HashSet<String>>,
-    token_ttl_seconds: u64,
-    session_ttl_seconds: u64,
-    frontend_origins: Vec<String>,
-    secure_cookies: bool,
-    enable_dev_login: bool,
-}
-
-impl AppConfig {
-    fn from_env() -> Result<Self, ConfigError> {
-        let livekit_api_key = read_required("LIVEKIT_API_KEY")?;
-        let livekit_api_secret = read_required("LIVEKIT_API_SECRET")?;
-        let google_client_id = read_required("GOOGLE_CLIENT_ID")?;
-        let google_client_secret = read_required("GOOGLE_CLIENT_SECRET")?;
-        let cookie_secret = read_required("AUTH_COOKIE_SECRET")?;
-        let auth_base_url = parse_url(read_required("AUTH_BASE_URL")?)?;
-
-        let bind_addr = env::var("AUTH_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8787".to_string());
-        let database_url = env::var("AUTH_DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite:///app/data/auth.db?mode=rwc".to_string());
-        let bootstrap_users = build_bootstrap_users(
-            &parse_csv(read_optional("AUTH_BOOTSTRAP_ADMIN_EMAILS")),
-            &parse_csv(read_optional("AUTH_BOOTSTRAP_GAMEMASTER_EMAILS")),
-            &parse_csv(read_optional("AUTH_BOOTSTRAP_PLAYER_EMAILS")),
-        )?;
-        let allowed_rooms = parse_optional_set(read_optional("ALLOWED_ROOMS"));
-        let token_ttl_seconds = env::var("TOKEN_TTL_SECONDS")
-            .ok()
-            .and_then(|val| val.parse::<u64>().ok())
-            .unwrap_or(3600);
-        let session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
-            .ok()
-            .and_then(|val| val.parse::<u64>().ok())
-            .unwrap_or(60 * 60 * 24 * 14);
-        let frontend_origins = {
-            let configured = parse_csv(read_optional("FRONTEND_ORIGINS"));
-            if configured.is_empty() {
-                vec![origin_from_url(&auth_base_url)]
-            } else {
-                configured
-            }
-        };
-        let secure_cookies = auth_base_url.scheme() == "https";
-        let enable_dev_login = env::var("AUTH_ENABLE_DEV_LOGIN")
-            .ok()
-            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
-            .unwrap_or(false);
-        let google_redirect_uri = auth_base_url
-            .join(GOOGLE_CALLBACK_PATH.trim_start_matches('/'))
-            .map_err(|value| ConfigError::InvalidUrl(value.to_string()))?
-            .to_string();
-
-        Ok(Self {
-            bind_addr,
-            database_url,
-            bootstrap_users,
-            livekit_api_key,
-            livekit_api_secret,
-            google_client_id,
-            google_client_secret,
-            google_redirect_uri,
-            auth_base_url,
-            cookie_secret,
-            allowed_rooms,
-            token_ttl_seconds,
-            session_ttl_seconds,
-            frontend_origins,
-            secure_cookies,
-            enable_dev_login,
-        })
-    }
-
-    fn absolute_frontend_path(&self, path: &str) -> String {
-        if let Ok(url) = self.auth_base_url.join(path.trim_start_matches('/')) {
-            url.to_string()
-        } else {
-            self.auth_base_url.to_string()
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-enum ConfigError {
-    #[error("missing required env var: {0}")]
-    MissingEnv(&'static str),
-    #[error("required env var must not be empty: {0}")]
-    EmptyEnv(&'static str),
-    #[error("invalid bootstrap user config: {0}")]
-    InvalidBootstrapUsers(String),
-    #[error("invalid url: {0}")]
-    InvalidUrl(String),
-}
-
-fn read_required(key: &'static str) -> Result<String, ConfigError> {
-    let value = env::var(key).map_err(|_| ConfigError::MissingEnv(key))?;
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(ConfigError::EmptyEnv(key));
-    }
-    Ok(trimmed.to_string())
-}
-
-fn read_optional(key: &'static str) -> Option<String> {
-    env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn parse_csv(input: Option<String>) -> Vec<String> {
-    input
-        .map(|value| {
-            value
-                .split(',')
-                .map(|entry| entry.trim().to_string())
-                .filter(|entry| !entry.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn parse_optional_set(input: Option<String>) -> Option<HashSet<String>> {
-    let values = parse_csv(input);
-    if values.is_empty() {
-        None
-    } else {
-        Some(values.into_iter().collect())
-    }
-}
-
-fn parse_url(value: String) -> Result<Url, ConfigError> {
-    let url = Url::parse(&value).map_err(|err| ConfigError::InvalidUrl(err.to_string()))?;
-    if url.host_str().is_none() {
-        return Err(ConfigError::InvalidUrl(format!(
-            "missing host in url: {value}"
-        )));
-    }
-    Ok(url)
-}
-
-fn origin_from_url(url: &Url) -> String {
-    match url.port() {
-        Some(port) => format!(
-            "{}://{}:{}",
-            url.scheme(),
-            url.host_str().unwrap_or("localhost"),
-            port
-        ),
-        None => format!(
-            "{}://{}",
-            url.scheme(),
-            url.host_str().unwrap_or("localhost")
-        ),
-    }
-}
-
-impl From<StoreError> for ConfigError {
-    fn from(value: StoreError) -> Self {
-        ConfigError::InvalidBootstrapUsers(value.to_string())
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct LoginQuery {
     next: Option<String>,
@@ -1249,6 +1073,7 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{config::parse_optional_set, users::build_bootstrap_users};
     use axum::{body::Body, http::Request};
     use jsonwebtoken::{decode, DecodingKey, Validation};
     use tower::ServiceExt;
