@@ -45,14 +45,8 @@ impl AppConfig {
             &parse_csv(read_optional("AUTH_BOOTSTRAP_PLAYER_EMAILS")),
         )?;
         let allowed_rooms = parse_optional_set(read_optional("ALLOWED_ROOMS"));
-        let token_ttl_seconds = env::var("TOKEN_TTL_SECONDS")
-            .ok()
-            .and_then(|val| val.parse::<u64>().ok())
-            .unwrap_or(3600);
-        let session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
-            .ok()
-            .and_then(|val| val.parse::<u64>().ok())
-            .unwrap_or(60 * 60 * 24 * 14);
+        let token_ttl_seconds = parse_ttl_seconds("TOKEN_TTL_SECONDS", 3600)?;
+        let session_ttl_seconds = parse_ttl_seconds("AUTH_SESSION_TTL_SECONDS", 60 * 60 * 24 * 14)?;
         let frontend_origins = {
             let configured = parse_csv(read_optional("FRONTEND_ORIGINS"));
             if configured.is_empty() {
@@ -64,7 +58,7 @@ impl AppConfig {
         let secure_cookies = auth_base_url.scheme() == "https";
         let enable_dev_login = env::var("AUTH_ENABLE_DEV_LOGIN")
             .ok()
-            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+            .map(|value| parse_bool_flag(&value))
             .unwrap_or(false);
         let google_redirect_uri = auth_base_url
             .join(GOOGLE_CALLBACK_PATH.trim_start_matches('/'))
@@ -110,6 +104,8 @@ pub(crate) enum ConfigError {
     InvalidBootstrapUsers(String),
     #[error("invalid url: {0}")]
     InvalidUrl(String),
+    #[error("invalid env var {key}: {value}")]
+    InvalidEnv { key: &'static str, value: String },
 }
 
 fn read_required(key: &'static str) -> Result<String, ConfigError> {
@@ -157,6 +153,23 @@ fn parse_url(value: String) -> Result<Url, ConfigError> {
         )));
     }
     Ok(url)
+}
+
+fn parse_ttl_seconds(key: &'static str, default_seconds: u64) -> Result<u64, ConfigError> {
+    match read_optional(key) {
+        Some(value) => value.parse::<u64>().map_err(|err| ConfigError::InvalidEnv {
+            key,
+            value: format!("expected positive integer seconds, got '{value}': {err}"),
+        }),
+        None => Ok(default_seconds),
+    }
+}
+
+fn parse_bool_flag(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
 }
 
 fn origin_from_url(url: &Url) -> String {
@@ -207,5 +220,16 @@ mod tests {
         let url = Url::parse("https://example.com:8443/some/path").expect("valid URL");
 
         assert_eq!(origin_from_url(&url), "https://example.com:8443");
+    }
+
+    #[test]
+    fn parse_bool_flag_accepts_common_case_variants() {
+        for value in ["1", "true", "True", "TRUE", "yes", "YES", "on", "On"] {
+            assert!(parse_bool_flag(value), "{value} should be truthy");
+        }
+
+        for value in ["0", "false", "no", "off", ""] {
+            assert!(!parse_bool_flag(value), "{value} should be falsey");
+        }
     }
 }
