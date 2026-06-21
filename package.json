@@ -14,7 +14,7 @@
   },
   "pnpm": {
     "overrides": {
-      "undici": "7.24.0",
+      "undici": "7.28.0",
       "flatted": "3.4.2",
       "picomatch@^4.0.0": "4.0.4",
       "fast-uri": "3.1.2",
@@ -31,10 +31,13 @@
           "CVE-2026-2581",
           "CVE-2026-1527",
           "CVE-2026-2229",
-          "CVE-2026-1526"
+          "CVE-2026-1526",
+          "GHSA-vmh5-mc38-953g",
+          "GHSA-vxpw-j846-p89q",
+          "GHSA-hm92-r4w5-c3mj"
         ],
-        "reference": "https://github.com/nodejs/undici/releases/tag/v7.24.0",
-        "note": "Pinned for the current audit cleanup. Undici v7.24.2 is available for reviewer verification or follow-up adoption if acceptable."
+        "reference": "https://github.com/nodejs/undici/releases/tag/v7.28.0",
+        "note": "Pinned for the current audit cleanup. Keep this override until transitive consumers, currently frontend > jsdom, accept a patched undici without forcing the override."
       },
       "fast-uri": {
         "mitigates": [
