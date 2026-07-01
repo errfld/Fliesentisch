@@ -12,7 +12,13 @@ describe("createEnvelope", () => {
       .spyOn(globalThis.crypto, "randomUUID")
       .mockReturnValue("11111111-1111-4111-8111-111111111111");
 
-    const envelope = createEnvelope("WHISPER_CREATE", "alice", { hello: "world" });
+    const envelope = createEnvelope("WHISPER_CREATE", "alice", {
+      id: "w1",
+      members: ["alice", "bob"],
+      createdBy: "alice",
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000
+    });
 
     expect(uuidSpy).toHaveBeenCalledTimes(1);
     expect(envelope).toEqual({
@@ -21,7 +27,13 @@ describe("createEnvelope", () => {
       eventId: "11111111-1111-4111-8111-111111111111",
       actor: "alice",
       ts: 1700000000000,
-      payload: { hello: "world" }
+      payload: {
+        id: "w1",
+        members: ["alice", "bob"],
+        createdBy: "alice",
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000
+      }
     });
   });
 });
@@ -52,7 +64,9 @@ describe("parseProtocolEnvelope", () => {
           type: 123,
           v: 1,
           eventId: "evt-1",
-          actor: "alice"
+          actor: "alice",
+          ts: 1700000000000,
+          payload: {}
         })
       )
     ).toBeNull();
@@ -63,7 +77,92 @@ describe("parseProtocolEnvelope", () => {
           type: "WHISPER_CREATE",
           v: 2,
           eventId: "evt-1",
-          actor: "alice"
+          actor: "alice",
+          ts: 1700000000000,
+          payload: {}
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("returns null for inherited protocol event names", () => {
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "toString",
+          v: 1,
+          eventId: "evt-inherited",
+          actor: "alice",
+          ts: 1700000000000,
+          payload: {}
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("returns null when timestamps are missing or invalid", () => {
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "STATE_REQUEST",
+          v: 1,
+          eventId: "evt-1",
+          actor: "alice",
+          payload: {}
+        })
+      )
+    ).toBeNull();
+
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "STATE_REQUEST",
+          v: 1,
+          eventId: "evt-1",
+          actor: "alice",
+          ts: Number.NaN,
+          payload: {}
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("returns null for malformed whisper payloads", () => {
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "WHISPER_CREATE",
+          v: 1,
+          eventId: "evt-whisper",
+          actor: "alice",
+          ts: 1700000000000,
+          payload: {
+            id: "w1",
+            members: ["alice", 42],
+            createdBy: "alice",
+            createdAt: 1700000000000,
+            updatedAt: 1700000000000
+          }
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("returns null for malformed split-room payloads", () => {
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "SPLIT_ROOM_UPSERT",
+          v: 1,
+          eventId: "evt-split",
+          actor: "gm",
+          ts: 1700000000000,
+          payload: {
+            id: "side-1",
+            name: "Side Room",
+            kind: "side",
+            updatedAt: "invalid"
+          }
         })
       )
     ).toBeNull();
