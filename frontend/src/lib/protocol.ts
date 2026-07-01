@@ -163,7 +163,7 @@ export function parseProtocolEnvelope(raw: string): AnyProtocolEnvelope | null {
 }
 
 function isProtocolEventType(type: unknown): type is ProtocolEventType {
-  return typeof type === "string" && type in protocolPayloadValidators;
+  return typeof type === "string" && Object.hasOwn(protocolPayloadValidators, type);
 }
 
 function isProtocolPayload<T extends ProtocolEventType>(

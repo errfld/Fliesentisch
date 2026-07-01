@@ -85,6 +85,21 @@ describe("parseProtocolEnvelope", () => {
     ).toBeNull();
   });
 
+  it("returns null for inherited protocol event names", () => {
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          type: "toString",
+          v: 1,
+          eventId: "evt-inherited",
+          actor: "alice",
+          ts: 1700000000000,
+          payload: {}
+        })
+      )
+    ).toBeNull();
+  });
+
   it("returns null when timestamps are missing or invalid", () => {
     expect(
       parseProtocolEnvelope(
@@ -137,14 +152,16 @@ describe("parseProtocolEnvelope", () => {
     expect(
       parseProtocolEnvelope(
         JSON.stringify({
-          type: "SPLIT_ASSIGNMENT_SET",
+          type: "SPLIT_ROOM_UPSERT",
           v: 1,
           eventId: "evt-split",
           actor: "gm",
           ts: 1700000000000,
           payload: {
-            participantIdentity: "alice",
-            updatedAt: 10
+            id: "side-1",
+            name: "Side Room",
+            kind: "side",
+            updatedAt: "invalid"
           }
         })
       )
