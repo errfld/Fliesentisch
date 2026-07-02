@@ -100,7 +100,7 @@ pub(crate) async fn mint_token(
         })?;
 
     let now = Utc::now();
-    let expiry = now + Duration::seconds(state.config.token_ttl_seconds as i64);
+    let expiry = token_expiry(now, state.config.token_ttl_seconds)?;
 
     let claims = LiveKitClaims {
         iss: state.config.livekit_api_key.clone(),
@@ -146,6 +146,21 @@ pub(crate) fn derive_room_identity(secret: &str, google_subject: &str) -> Result
     ))
 }
 
+fn token_expiry(now: DateTime<Utc>, token_ttl_seconds: u64) -> Result<DateTime<Utc>, ApiError> {
+    let ttl_seconds = i64::try_from(token_ttl_seconds).map_err(|err| {
+        error!("token TTL exceeds supported duration range: {err}");
+        ApiError::Internal
+    })?;
+    let ttl = Duration::try_seconds(ttl_seconds).ok_or_else(|| {
+        error!("token TTL exceeds supported duration range");
+        ApiError::Internal
+    })?;
+    now.checked_add_signed(ttl).ok_or_else(|| {
+        error!("token TTL would produce an unsupported expiry timestamp");
+        ApiError::Internal
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +195,19 @@ mod tests {
         assert_ne!(first, different_subject);
         assert!(first.starts_with("u_"));
         assert!(!first.contains("google-subject"));
+    }
+
+    #[test]
+    fn token_expiry_rejects_oversized_ttl() {
+        let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+
+        assert_eq!(
+            token_expiry(now, 3_600).unwrap(),
+            DateTime::<Utc>::from_timestamp(3_600, 0).unwrap()
+        );
+        assert!(matches!(
+            token_expiry(now, i64::MAX as u64 + 1),
+            Err(ApiError::Internal)
+        ));
     }
 }
