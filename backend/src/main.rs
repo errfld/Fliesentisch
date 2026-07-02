@@ -1,4 +1,5 @@
 mod config;
+mod error;
 mod users;
 
 use axum::{
@@ -7,7 +8,7 @@ use axum::{
         header::{ACCEPT, CONTENT_TYPE},
         HeaderValue, Method, StatusCode,
     },
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect},
     routing::{get, patch, post},
     Json, Router,
 };
@@ -15,6 +16,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
 use config::AppConfig;
+use error::ApiError;
 use hmac::{Hmac, KeyInit, Mac};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::{rngs::SysRng, TryRng};
@@ -22,7 +24,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc, time::Duration as StdDuration};
-use thiserror::Error;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     trace::TraceLayer,
@@ -1015,59 +1016,6 @@ struct GoogleUserInfo {
     email: String,
     email_verified: bool,
     name: Option<String>,
-}
-
-#[derive(Debug, Error)]
-enum ApiError {
-    #[error("not authenticated")]
-    Unauthenticated,
-    #[error("room is not allowed: {0}")]
-    RoomNotAllowed(String),
-    #[error("{0}")]
-    Forbidden(String),
-    #[error("{0}")]
-    Conflict(String),
-    #[error("{0}")]
-    NotFound(String),
-    #[error("bad request: {0}")]
-    BadRequest(String),
-    #[error("internal error")]
-    Internal,
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match self {
-            ApiError::Unauthenticated => (
-                StatusCode::UNAUTHORIZED,
-                "UNAUTHENTICATED",
-                "authentication required".to_string(),
-            ),
-            ApiError::RoomNotAllowed(_) => {
-                (StatusCode::FORBIDDEN, "ROOM_NOT_ALLOWED", self.to_string())
-            }
-            ApiError::Forbidden(_) => (StatusCode::FORBIDDEN, "FORBIDDEN", self.to_string()),
-            ApiError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT", self.to_string()),
-            ApiError::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND", self.to_string()),
-            ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", self.to_string()),
-            ApiError::Internal => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "INTERNAL",
-                "unexpected server error".to_string(),
-            ),
-        };
-
-        (
-            status,
-            Json(serde_json::json!({
-                "error": {
-                    "code": code,
-                    "message": message,
-                }
-            })),
-        )
-            .into_response()
-    }
 }
 
 #[cfg(test)]
