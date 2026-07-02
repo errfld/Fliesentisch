@@ -1,5 +1,6 @@
 mod config;
 mod error;
+mod token;
 mod users;
 
 use axum::{
@@ -14,16 +15,16 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use config::AppConfig;
 use error::ApiError;
 use hmac::{Hmac, KeyInit, Mac};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use rand::{rngs::SysRng, TryRng};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc, time::Duration as StdDuration};
+use token::mint_token;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     trace::TraceLayer,
@@ -476,72 +477,6 @@ async fn delete_admin_user(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn mint_token(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-    Json(req): Json<TokenRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    req.validate()?;
-    let user = require_authenticated(&state, &jar).await?;
-
-    if let Some(allowed_rooms) = &state.config.allowed_rooms {
-        if !allowed_rooms.contains(&req.room) {
-            return Err(ApiError::RoomNotAllowed(req.room.clone()));
-        }
-    }
-
-    let google_subject = user.google_subject.clone().ok_or_else(|| {
-        ApiError::Forbidden("authenticated user is missing Google identity".to_string())
-    })?;
-    let opaque_identity = derive_room_identity(&state.config.cookie_secret, &google_subject)?;
-    let nickname = req.name.trim();
-
-    let updated_user = state
-        .user_store
-        .update_user_display_name(user.id, Some(nickname))
-        .await
-        .map_err(|err| {
-            error!("update display name error: {err}");
-            ApiError::Internal
-        })?;
-
-    let now = Utc::now();
-    let expiry = now + Duration::seconds(state.config.token_ttl_seconds as i64);
-
-    let claims = LiveKitClaims {
-        iss: state.config.livekit_api_key.clone(),
-        sub: opaque_identity,
-        name: updated_user
-            .display_name
-            .unwrap_or_else(|| nickname.to_string()),
-        nbf: now.timestamp(),
-        exp: expiry.timestamp(),
-        video: LiveKitVideoGrant {
-            room_join: true,
-            room: req.room,
-            can_publish: true,
-            can_subscribe: true,
-        },
-    };
-
-    let token = encode(
-        &Header::new(Algorithm::HS256),
-        &claims,
-        &EncodingKey::from_secret(state.config.livekit_api_secret.as_bytes()),
-    )
-    .map_err(|_| ApiError::Internal)?;
-
-    Ok((
-        StatusCode::OK,
-        Json(TokenResponse {
-            token,
-            expires_at: expiry,
-            identity: claims.sub,
-            game_role: updated_user.game_role,
-        }),
-    ))
-}
-
 async fn get_authenticated_user(
     state: &AppState,
     jar: &CookieJar,
@@ -562,7 +497,10 @@ async fn get_authenticated_user(
     Ok(user.filter(|value| value.is_active))
 }
 
-async fn require_authenticated(state: &AppState, jar: &CookieJar) -> Result<AuthUser, ApiError> {
+pub(crate) async fn require_authenticated(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<AuthUser, ApiError> {
     get_authenticated_user(state, jar)
         .await?
         .ok_or(ApiError::Unauthenticated)
@@ -760,16 +698,6 @@ fn random_token(num_bytes: usize) -> Result<String, ApiError> {
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
-fn derive_room_identity(secret: &str, google_subject: &str) -> Result<String, ApiError> {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
-    mac.update(b"livekit-identity:");
-    mac.update(google_subject.as_bytes());
-    Ok(format!(
-        "u_{}",
-        URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
-    ))
-}
-
 fn dev_subject_for_email(email: &str) -> String {
     let digest = Sha256::digest(email.as_bytes());
     format!("dev-{}", URL_SAFE_NO_PAD.encode(digest))
@@ -829,40 +757,6 @@ struct DevLoginQuery {
     email: String,
     name: Option<String>,
     next: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TokenRequest {
-    room: String,
-    name: String,
-}
-
-impl TokenRequest {
-    fn validate(&self) -> Result<(), ApiError> {
-        if self.room.trim().is_empty() {
-            return Err(ApiError::BadRequest("`room` must not be empty".to_string()));
-        }
-
-        let nickname = self.name.trim();
-        if nickname.is_empty() {
-            return Err(ApiError::BadRequest("`name` must not be empty".to_string()));
-        }
-        if nickname.chars().count() > MAX_DISPLAY_NAME_LENGTH {
-            return Err(ApiError::BadRequest(format!(
-                "`name` must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TokenResponse {
-    token: String,
-    expires_at: DateTime<Utc>,
-    identity: String,
-    game_role: GameRole,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -984,27 +878,6 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct LiveKitClaims {
-    iss: String,
-    sub: String,
-    name: String,
-    nbf: i64,
-    exp: i64,
-    video: LiveKitVideoGrant,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct LiveKitVideoGrant {
-    room: String,
-    #[serde(rename = "roomJoin")]
-    room_join: bool,
-    #[serde(rename = "canPublish")]
-    can_publish: bool,
-    #[serde(rename = "canSubscribe")]
-    can_subscribe: bool,
-}
-
 #[derive(Debug, Deserialize)]
 struct GoogleTokenResponse {
     access_token: String,
@@ -1023,7 +896,8 @@ mod tests {
     use super::*;
     use crate::{config::parse_optional_set, users::build_bootstrap_users};
     use axum::{body::Body, http::Request};
-    use jsonwebtoken::{decode, DecodingKey, Validation};
+    use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+    use token::{derive_room_identity, LiveKitClaims, TokenResponse};
     use tower::ServiceExt;
 
     async fn test_state() -> Arc<AppState> {
