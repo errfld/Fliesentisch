@@ -286,14 +286,18 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
           }
           devicePanel={
             <DevicePanel
-              audioDevices={media.audioDevices}
-              videoDevices={media.videoDevices}
-              selectedAudioDevice={media.selectedAudioDevice}
-              selectedVideoDevice={media.selectedVideoDevice}
-              mirrorSelfView={media.mirrorSelfView}
-              onMirrorSelfViewChange={media.onMirrorSelfViewChange}
-              onSelectAudioDevice={media.onSelectAudioDevice}
-              onSelectVideoDevice={media.onSelectVideoDevice}
+              model={{
+                audioDevices: media.audioDevices,
+                videoDevices: media.videoDevices,
+                selectedAudioDevice: media.selectedAudioDevice,
+                selectedVideoDevice: media.selectedVideoDevice,
+                mirrorSelfView: media.mirrorSelfView
+              }}
+              actions={{
+                onMirrorSelfViewChange: media.onMirrorSelfViewChange,
+                onSelectAudioDevice: media.onSelectAudioDevice,
+                onSelectVideoDevice: media.onSelectVideoDevice
+              }}
             />
           }
         />

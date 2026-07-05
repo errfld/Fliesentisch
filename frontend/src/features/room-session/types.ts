@@ -49,3 +49,17 @@ export type WhisperPanelState = {
   isPttActive: boolean;
   identity: string;
 };
+
+export type DevicePanelViewModel = {
+  audioDevices: ReadonlyArray<MediaDeviceInfo>;
+  videoDevices: ReadonlyArray<MediaDeviceInfo>;
+  selectedAudioDevice: string;
+  selectedVideoDevice: string;
+  mirrorSelfView: boolean;
+};
+
+export type DevicePanelActions = {
+  onMirrorSelfViewChange: (mirrored: boolean) => void;
+  onSelectAudioDevice: (deviceId: string) => Promise<void>;
+  onSelectVideoDevice: (deviceId: string) => Promise<void>;
+};
