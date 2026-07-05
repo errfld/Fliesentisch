@@ -1,13 +1,15 @@
+mod admin;
 mod config;
 mod error;
 mod token;
 mod users;
 
+use admin::{create_admin_user, delete_admin_user, list_admin_users, update_admin_user};
 use axum::{
-    extract::{ConnectInfo, Path, Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{
         header::{ACCEPT, CONTENT_TYPE},
-        HeaderValue, Method, StatusCode,
+        HeaderValue, Method,
     },
     response::{IntoResponse, Redirect},
     routing::{get, patch, post},
@@ -31,7 +33,7 @@ use tower_http::{
 };
 use tracing::{error, info};
 use url::Url;
-use users::{AuthUser, GameRole, NewUser, PlatformRole, StoreError, UserPatch, UserStore};
+use users::{AuthUser, GameRole, PlatformRole, StoreError, UserStore};
 
 const SESSION_COOKIE_NAME: &str = "vt_session";
 const OAUTH_STATE_COOKIE_NAME: &str = "vt_oauth_state";
@@ -42,7 +44,7 @@ const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
 const UNAUTHORIZED_PATH: &str = "/auth/unauthorized";
 const DEFAULT_AUTH_REDIRECT: &str = "/";
-const MAX_DISPLAY_NAME_LENGTH: usize = 48;
+pub(crate) const MAX_DISPLAY_NAME_LENGTH: usize = 48;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -397,86 +399,6 @@ async fn dev_login(
     ))
 }
 
-async fn list_admin_users(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-) -> Result<impl IntoResponse, ApiError> {
-    require_admin(&state, &jar).await?;
-    let users = state.user_store.list_users().await.map_err(|err| {
-        error!("list admin users error: {err}");
-        ApiError::Internal
-    })?;
-
-    Ok(Json(AdminUsersResponse {
-        users: users.into_iter().map(AdminUser::from).collect(),
-    }))
-}
-
-async fn create_admin_user(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-    Json(req): Json<CreateUserRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    require_admin(&state, &jar).await?;
-    req.validate()?;
-
-    let user = state
-        .user_store
-        .create_user(NewUser {
-            email: req.email,
-            display_name: req.display_name,
-            platform_role: req.platform_role,
-            game_role: req.game_role,
-            is_active: req.is_active,
-        })
-        .await
-        .map_err(store_to_api_error)?;
-
-    Ok((StatusCode::CREATED, Json(AdminUser::from(user))))
-}
-
-async fn update_admin_user(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-    Path(user_id): Path<i64>,
-    Json(req): Json<UpdateUserRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    require_admin(&state, &jar).await?;
-    req.validate()?;
-
-    let user = state
-        .user_store
-        .update_user(
-            user_id,
-            UserPatch {
-                email: req.email,
-                display_name: req.display_name,
-                platform_role: req.platform_role,
-                game_role: req.game_role,
-                is_active: req.is_active,
-            },
-        )
-        .await
-        .map_err(store_to_api_error)?;
-
-    Ok(Json(AdminUser::from(user)))
-}
-
-async fn delete_admin_user(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-    Path(user_id): Path<i64>,
-) -> Result<impl IntoResponse, ApiError> {
-    require_admin(&state, &jar).await?;
-    state
-        .user_store
-        .delete_user(user_id)
-        .await
-        .map_err(store_to_api_error)?;
-
-    Ok(StatusCode::NO_CONTENT)
-}
-
 async fn get_authenticated_user(
     state: &AppState,
     jar: &CookieJar,
@@ -506,7 +428,7 @@ pub(crate) async fn require_authenticated(
         .ok_or(ApiError::Unauthenticated)
 }
 
-async fn require_admin(state: &AppState, jar: &CookieJar) -> Result<AuthUser, ApiError> {
+pub(crate) async fn require_admin(state: &AppState, jar: &CookieJar) -> Result<AuthUser, ApiError> {
     let user = require_authenticated(state, jar).await?;
     if user.platform_role != PlatformRole::Admin {
         return Err(ApiError::Forbidden(
@@ -608,7 +530,7 @@ async fn create_session_cookie(
     ))
 }
 
-fn store_to_api_error(err: StoreError) -> ApiError {
+pub(crate) fn store_to_api_error(err: StoreError) -> ApiError {
     match err {
         StoreError::UserNotFound(_) => ApiError::NotFound("user not found".to_string()),
         StoreError::InvalidEmail(message) => ApiError::BadRequest(message),
@@ -733,10 +655,10 @@ fn unauthorized_redirect(
 }
 
 #[derive(Debug, Clone)]
-struct AppState {
-    http_client: Client,
-    config: AppConfig,
-    user_store: UserStore,
+pub(crate) struct AppState {
+    pub(crate) http_client: Client,
+    pub(crate) config: AppConfig,
+    pub(crate) user_store: UserStore,
 }
 
 #[derive(Debug, Deserialize)]
@@ -786,98 +708,6 @@ impl From<AuthUser> for SessionUser {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct AdminUsersResponse {
-    users: Vec<AdminUser>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AdminUser {
-    id: i64,
-    email: String,
-    display_name: Option<String>,
-    is_linked: bool,
-    platform_role: PlatformRole,
-    game_role: GameRole,
-    is_active: bool,
-}
-
-impl From<AuthUser> for AdminUser {
-    fn from(user: AuthUser) -> Self {
-        Self {
-            id: user.id,
-            email: user.email,
-            display_name: user.display_name,
-            is_linked: user.google_subject.is_some(),
-            platform_role: user.platform_role,
-            game_role: user.game_role,
-            is_active: user.is_active,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateUserRequest {
-    email: String,
-    #[serde(default)]
-    display_name: Option<String>,
-    platform_role: PlatformRole,
-    game_role: GameRole,
-    #[serde(default = "default_true")]
-    is_active: bool,
-}
-
-impl CreateUserRequest {
-    fn validate(&self) -> Result<(), ApiError> {
-        if self.email.trim().is_empty() {
-            return Err(ApiError::BadRequest(
-                "`email` must not be empty".to_string(),
-            ));
-        }
-        if let Some(name) = self.display_name.as_deref() {
-            if name.trim().chars().count() > MAX_DISPLAY_NAME_LENGTH {
-                return Err(ApiError::BadRequest(format!(
-                    "`display_name` must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
-                )));
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateUserRequest {
-    email: Option<String>,
-    display_name: Option<String>,
-    platform_role: Option<PlatformRole>,
-    game_role: Option<GameRole>,
-    is_active: Option<bool>,
-}
-
-impl UpdateUserRequest {
-    fn validate(&self) -> Result<(), ApiError> {
-        if let Some(email) = self.email.as_deref() {
-            if email.trim().is_empty() {
-                return Err(ApiError::BadRequest(
-                    "`email` must not be empty".to_string(),
-                ));
-            }
-        }
-        if let Some(name) = self.display_name.as_deref() {
-            if name.trim().chars().count() > MAX_DISPLAY_NAME_LENGTH {
-                return Err(ApiError::BadRequest(format!(
-                    "`display_name` must be at most {MAX_DISPLAY_NAME_LENGTH} characters"
-                )));
-            }
-        }
-        Ok(())
-    }
-}
-
-fn default_true() -> bool {
-    true
-}
-
 #[derive(Debug, Deserialize)]
 struct GoogleTokenResponse {
     access_token: String,
@@ -894,8 +724,10 @@ struct GoogleUserInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::parse_optional_set, users::build_bootstrap_users};
-    use axum::{body::Body, http::Request};
+    use crate::{
+        admin::AdminUsersResponse, config::parse_optional_set, users::build_bootstrap_users,
+    };
+    use axum::{body::Body, http::Request, http::StatusCode};
     use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
     use token::{derive_room_identity, LiveKitClaims, TokenResponse};
     use tower::ServiceExt;
