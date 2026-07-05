@@ -207,10 +207,62 @@ mod tests {
     }
 
     #[test]
+    fn create_user_request_accepts_valid_input() {
+        let request = CreateUserRequest {
+            email: "new@example.com".to_string(),
+            display_name: Some("New Player".to_string()),
+            platform_role: PlatformRole::User,
+            game_role: GameRole::Player,
+            is_active: true,
+        };
+
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn create_user_request_rejects_overlong_display_name() {
+        let request = CreateUserRequest {
+            email: "new@example.com".to_string(),
+            display_name: Some("x".repeat(MAX_DISPLAY_NAME_LENGTH + 1)),
+            platform_role: PlatformRole::User,
+            game_role: GameRole::Player,
+            is_active: true,
+        };
+
+        assert!(matches!(request.validate(), Err(ApiError::BadRequest(_))));
+    }
+
+    #[test]
     fn update_user_request_rejects_blank_email() {
         let request = UpdateUserRequest {
             email: Some("\t".to_string()),
             display_name: None,
+            platform_role: None,
+            game_role: None,
+            is_active: None,
+        };
+
+        assert!(matches!(request.validate(), Err(ApiError::BadRequest(_))));
+    }
+
+    #[test]
+    fn update_user_request_accepts_valid_input() {
+        let request = UpdateUserRequest {
+            email: Some("updated@example.com".to_string()),
+            display_name: Some("Updated Player".to_string()),
+            platform_role: Some(PlatformRole::Admin),
+            game_role: Some(GameRole::Gamemaster),
+            is_active: Some(true),
+        };
+
+        assert!(request.validate().is_ok());
+    }
+
+    #[test]
+    fn update_user_request_rejects_overlong_display_name() {
+        let request = UpdateUserRequest {
+            email: None,
+            display_name: Some("x".repeat(MAX_DISPLAY_NAME_LENGTH + 1)),
             platform_role: None,
             game_role: None,
             is_active: None,
