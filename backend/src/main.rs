@@ -1,6 +1,7 @@
 mod admin;
 mod config;
 mod error;
+mod session;
 mod token;
 mod users;
 
@@ -23,7 +24,8 @@ use error::ApiError;
 use hmac::{Hmac, KeyInit, Mac};
 use rand::{rngs::SysRng, TryRng};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use session::{get_session, logout};
 use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, sync::Arc, time::Duration as StdDuration};
 use token::mint_token;
@@ -33,9 +35,9 @@ use tower_http::{
 };
 use tracing::{error, info};
 use url::Url;
-use users::{AuthUser, GameRole, PlatformRole, StoreError, UserStore};
+use users::{AuthUser, PlatformRole, StoreError, UserStore};
 
-const SESSION_COOKIE_NAME: &str = "vt_session";
+pub(crate) const SESSION_COOKIE_NAME: &str = "vt_session";
 const OAUTH_STATE_COOKIE_NAME: &str = "vt_oauth_state";
 const OAUTH_VERIFIER_COOKIE_NAME: &str = "vt_oauth_verifier";
 const OAUTH_NEXT_COOKIE_NAME: &str = "vt_oauth_next";
@@ -174,18 +176,6 @@ async fn health(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse,
             "count": user_count,
         }
     })))
-}
-
-async fn get_session(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-) -> Result<impl IntoResponse, ApiError> {
-    let user = get_authenticated_user(&state, &jar).await?;
-
-    Ok(Json(AuthSessionResponse {
-        authenticated: user.is_some(),
-        user: user.map(SessionUser::from),
-    }))
 }
 
 async fn start_google_login(
@@ -330,26 +320,6 @@ async fn handle_google_callback(
     ))
 }
 
-async fn logout(
-    State(state): State<Arc<AppState>>,
-    jar: CookieJar,
-) -> Result<impl IntoResponse, ApiError> {
-    if let Some(session_id) = read_signed_cookie(&state.config, &jar, SESSION_COOKIE_NAME) {
-        state
-            .user_store
-            .delete_session(&session_id)
-            .await
-            .map_err(|err| {
-                error!("logout session delete error: {err}");
-                ApiError::Internal
-            })?;
-    }
-
-    let jar = remove_cookie(&state.config, jar, SESSION_COOKIE_NAME);
-
-    Ok((jar, Json(serde_json::json!({ "ok": true }))))
-}
-
 async fn dev_login(
     State(state): State<Arc<AppState>>,
     jar: CookieJar,
@@ -399,7 +369,7 @@ async fn dev_login(
     ))
 }
 
-async fn get_authenticated_user(
+pub(crate) async fn get_authenticated_user(
     state: &AppState,
     jar: &CookieJar,
 ) -> Result<Option<AuthUser>, ApiError> {
@@ -566,7 +536,7 @@ fn set_cookie(
     jar.add(builder.build())
 }
 
-fn remove_cookie(config: &AppConfig, jar: CookieJar, name: &str) -> CookieJar {
+pub(crate) fn remove_cookie(config: &AppConfig, jar: CookieJar, name: &str) -> CookieJar {
     jar.remove(
         Cookie::build((name.to_string(), String::new()))
             .path("/")
@@ -583,7 +553,11 @@ fn clear_oauth_cookies(config: &AppConfig, jar: CookieJar) -> CookieJar {
     remove_cookie(config, jar, OAUTH_NEXT_COOKIE_NAME)
 }
 
-fn read_signed_cookie(config: &AppConfig, jar: &CookieJar, name: &str) -> Option<String> {
+pub(crate) fn read_signed_cookie(
+    config: &AppConfig,
+    jar: &CookieJar,
+    name: &str,
+) -> Option<String> {
     let value = jar.get(name)?.value().to_string();
     verify_signed_value(&config.cookie_secret, &value)
 }
@@ -679,33 +653,6 @@ struct DevLoginQuery {
     email: String,
     name: Option<String>,
     next: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AuthSessionResponse {
-    authenticated: bool,
-    user: Option<SessionUser>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SessionUser {
-    id: i64,
-    email: String,
-    display_name: Option<String>,
-    platform_role: PlatformRole,
-    game_role: GameRole,
-}
-
-impl From<AuthUser> for SessionUser {
-    fn from(user: AuthUser) -> Self {
-        Self {
-            id: user.id,
-            email: user.email,
-            display_name: user.display_name,
-            platform_role: user.platform_role,
-            game_role: user.game_role,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
