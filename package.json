@@ -20,7 +20,7 @@
       "fast-uri": "3.1.2",
       "h3-v2": "npm:h3@2.0.1-rc.20",
       "@tanstack/react-start": "1.168.27",
-      "@tanstack/router-plugin": "1.168.18",
+      "@tanstack/router-plugin": "1.168.19",
       "@tanstack/react-router": "1.170.17"
     },
     "reviewNotes": {
@@ -74,6 +74,6 @@
     }
   },
   "devDependencies": {
-    "turbo": "^2.10.0"
+    "turbo": "^2.10.3"
   }
 }
