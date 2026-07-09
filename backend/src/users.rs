@@ -4,6 +4,8 @@ use sqlx::{sqlite::SqlitePoolOptions, Row, SqlitePool};
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error;
 
+pub(crate) const MAX_DISPLAY_NAME_LENGTH: usize = 48;
+
 #[derive(Debug, Clone)]
 pub struct UserStore {
     pool: SqlitePool,

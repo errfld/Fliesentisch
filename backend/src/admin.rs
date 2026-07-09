@@ -11,10 +11,10 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    error::ApiError,
-    require_admin, store_to_api_error,
-    users::{AuthUser, GameRole, NewUser, PlatformRole, UserPatch},
-    AppState, MAX_DISPLAY_NAME_LENGTH,
+    auth::require_admin,
+    error::{store_to_api_error, ApiError},
+    state::AppState,
+    users::{AuthUser, GameRole, NewUser, PlatformRole, UserPatch, MAX_DISPLAY_NAME_LENGTH},
 };
 
 #[derive(Debug, Serialize, Deserialize)]

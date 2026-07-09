@@ -10,7 +10,10 @@ use sha2::Sha256;
 use tracing::error;
 
 use crate::{
-    error::ApiError, require_authenticated, users::GameRole, AppState, MAX_DISPLAY_NAME_LENGTH,
+    auth::require_authenticated,
+    error::ApiError,
+    state::AppState,
+    users::{GameRole, MAX_DISPLAY_NAME_LENGTH},
 };
 
 type HmacSha256 = Hmac<Sha256>;
