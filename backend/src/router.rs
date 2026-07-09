@@ -106,7 +106,7 @@ mod tests {
         auth::{random_token, signed_value, SESSION_COOKIE_NAME},
         config::{parse_optional_set, AppConfig},
         token::{derive_room_identity, LiveKitClaims, TokenResponse},
-        users::{build_bootstrap_users, CampaignPreset, UserStore},
+        users::{build_bootstrap_users, CampaignPreset, PlatformRole, UserStore},
     };
     use axum::{body::Body, http::Request, http::StatusCode};
     use chrono::{Duration, Utc};
@@ -299,6 +299,15 @@ mod tests {
         .unwrap();
         assert_eq!(decoded.claims.video.room, "dnd-table-1");
         assert_eq!(decoded.claims.sub, parsed.identity);
+        assert_eq!(
+            decoded.claims.attributes.get("game_role"),
+            Some(&"player".to_string())
+        );
+        assert_eq!(
+            decoded.claims.attributes.get("platform_role"),
+            Some(&"user".to_string())
+        );
+        assert_eq!(parsed.platform_role, PlatformRole::User);
         assert_eq!(
             parsed.identity,
             derive_room_identity(&state.config.cookie_secret, "google-player").unwrap()
@@ -602,6 +611,16 @@ mod tests {
                 .unwrap();
             let token: TokenResponse = serde_json::from_slice(&body).unwrap();
             assert_eq!(token.game_role, expected_role);
+            let decoded = decode::<LiveKitClaims>(
+                &token.token,
+                &DecodingKey::from_secret("devsecret".as_bytes()),
+                &Validation::new(Algorithm::HS256),
+            )
+            .unwrap();
+            assert_eq!(
+                decoded.claims.attributes.get("game_role"),
+                Some(&expected_role.as_str().to_string())
+            );
         }
     }
 

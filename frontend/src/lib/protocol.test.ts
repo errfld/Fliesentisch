@@ -168,6 +168,50 @@ describe("parseProtocolEnvelope", () => {
     ).toBeNull();
   });
 
+  it("rejects malformed or unsafe handout spotlight payloads", () => {
+    const baseEnvelope = {
+      type: "HANDOUT_SPOTLIGHT_UPDATE",
+      v: 1,
+      eventId: "evt-handout",
+      actor: "gm",
+      ts: 1700000000000
+    };
+
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          ...baseEnvelope,
+          payload: {
+            handout: {
+              imageUrl: "javascript:alert(1)",
+              presenterIdentity: "gm",
+              presenterRole: "gamemaster",
+              updatedAt: 10
+            },
+            updatedAt: 10
+          }
+        })
+      )
+    ).toBeNull();
+
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({
+          ...baseEnvelope,
+          payload: {
+            handout: {
+              imageUrl: "https://example.com/scene.jpg",
+              presenterIdentity: "gm",
+              presenterRole: "player",
+              updatedAt: 10
+            },
+            updatedAt: 10
+          }
+        })
+      )
+    ).toBeNull();
+  });
+
   it("parses a valid protocol envelope", () => {
     const raw = JSON.stringify({
       type: "SPOTLIGHT_UPDATE",
@@ -227,6 +271,38 @@ describe("parseProtocolEnvelope", () => {
         splitState: {
           gmIdentity: "gm",
           gmFocusRoomId: "side-1"
+        }
+      }
+    });
+  });
+
+  it("parses a valid handout spotlight update", () => {
+    const parsed = parseProtocolEnvelope(
+      JSON.stringify({
+        type: "HANDOUT_SPOTLIGHT_UPDATE",
+        v: 1,
+        eventId: "evt-handout",
+        actor: "gm",
+        ts: 1700000000000,
+        payload: {
+          handout: {
+            imageUrl: "https://example.com/scene.jpg",
+            title: "The ruined observatory",
+            presenterIdentity: "gm",
+            presenterRole: "gamemaster",
+            updatedAt: 1700000000000
+          },
+          updatedAt: 1700000000000
+        }
+      })
+    );
+
+    expect(parsed).toMatchObject({
+      type: "HANDOUT_SPOTLIGHT_UPDATE",
+      payload: {
+        handout: {
+          title: "The ruined observatory",
+          presenterIdentity: "gm"
         }
       }
     });

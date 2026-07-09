@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRoomConnection } from "@/features/room-session/hooks/useRoomConnection";
 import { useRoomDiagnostics } from "@/features/room-session/hooks/useRoomDiagnostics";
+import { useHandoutSpotlightSession } from "@/features/room-session/hooks/useHandoutSpotlightSession";
 import { useRoomMedia } from "@/features/room-session/hooks/useRoomMedia";
 import { useRoomParticipants } from "@/features/room-session/hooks/useRoomParticipants";
 import { useRoomProtocol } from "@/features/room-session/hooks/useRoomProtocol";
@@ -9,12 +10,17 @@ import { useWhisperSession } from "@/features/room-session/hooks/useWhisperSessi
 import {
   buildAudioTracks,
   buildRoomSessionCollections,
-  buildVideoTiles
+  buildVideoTiles,
+  resolveParticipantLabel
 } from "@/features/room-session/lib/session-selectors";
 import type {
   CommandResult,
   DevicePanelActions,
   DevicePanelViewModel,
+  HandoutControlPanelActions,
+  HandoutControlPanelViewModel,
+  HandoutSpotlightActions,
+  HandoutSpotlightViewModel,
   RoomTopBarActions,
   RoomTopBarViewModel,
   SplitControlPanelActions,
@@ -65,6 +71,13 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
     identity: connection.identity,
     gameRole: connection.gameRole,
     participantIdentities
+  });
+  const handoutSession = useHandoutSpotlightSession({
+    room: connection.room,
+    protocol,
+    identity: connection.identity,
+    gameRole: connection.gameRole,
+    platformRole: connection.platformRole
   });
   const whisperSession = useWhisperSession({
     room: connection.room,
@@ -257,6 +270,34 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
     } satisfies DevicePanelActions
   };
 
+  const handoutControl = handoutSession.canManage
+    ? {
+        model: {
+          handout: handoutSession.handout,
+          isPublishing: handoutSession.isPublishing,
+          commandError: handoutSession.commandError
+        } satisfies HandoutControlPanelViewModel,
+        actions: {
+          onBroadcast: handoutSession.broadcastHandout,
+          onStop: handoutSession.stopHandout
+        } satisfies HandoutControlPanelActions
+      }
+    : undefined;
+
+  const handoutSpotlight = {
+    model: {
+      handout: handoutSession.handout,
+      presenterLabel: handoutSession.handout
+        ? resolveParticipantLabel(handoutSession.handout.presenterIdentity, participantDisplayNames)
+        : "",
+      isMinimized: handoutSession.isMinimized
+    } satisfies HandoutSpotlightViewModel,
+    actions: {
+      onMinimize: handoutSession.minimize,
+      onRestore: handoutSession.restore
+    } satisfies HandoutSpotlightActions
+  };
+
   return {
     status: {
       isConnecting: connection.isConnecting || media.isInitializing,
@@ -265,8 +306,10 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
     },
     topBar,
     videoGrid,
+    handoutSpotlight,
     sidebar: {
       open: sidebarOpen,
+      handoutControl,
       splitPanelVisible: splitSession.canManageSplitRooms || splitSession.isActive || Boolean(splitSession.notice),
       splitControl,
       splitStatus: {

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -50,6 +50,7 @@ pub(crate) struct TokenResponse {
     pub(crate) expires_at: DateTime<Utc>,
     pub(crate) identity: String,
     pub(crate) game_role: GameRole,
+    pub(crate) platform_role: PlatformRole,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,6 +60,7 @@ pub(crate) struct LiveKitClaims {
     pub(crate) name: String,
     pub(crate) nbf: i64,
     pub(crate) exp: i64,
+    pub(crate) attributes: BTreeMap<String, String>,
     pub(crate) video: LiveKitVideoGrant,
 }
 
@@ -134,6 +136,16 @@ pub(crate) async fn mint_token(
     let now = Utc::now();
     let expiry = token_expiry(now, state.config.token_ttl_seconds)?;
 
+    let attributes = BTreeMap::from([
+        (
+            "game_role".to_string(),
+            effective_game_role.as_str().to_string(),
+        ),
+        (
+            "platform_role".to_string(),
+            updated_user.platform_role.as_str().to_string(),
+        ),
+    ]);
     let claims = LiveKitClaims {
         iss: state.config.livekit_api_key.clone(),
         sub: opaque_identity,
@@ -142,6 +154,7 @@ pub(crate) async fn mint_token(
             .unwrap_or_else(|| nickname.to_string()),
         nbf: now.timestamp(),
         exp: expiry.timestamp(),
+        attributes,
         video: LiveKitVideoGrant {
             room_join: true,
             room,
@@ -164,6 +177,7 @@ pub(crate) async fn mint_token(
             expires_at: expiry,
             identity: claims.sub,
             game_role: effective_game_role,
+            platform_role: updated_user.platform_role,
         }),
     ))
 }

@@ -3,6 +3,7 @@
 import { defineConfig, type ReporterDescription } from "@playwright/test";
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3100";
+const webServerPort = new URL(baseURL).port || (baseURL.startsWith("https:") ? "443" : "80");
 const ciReporter: ReporterDescription[] = [
   ["github"],
   ["junit", { outputFile: "test-results/junit.xml" }],
@@ -31,7 +32,7 @@ export default defineConfig({
     }
   },
   webServer: {
-    command: "pnpm exec vite dev --host 127.0.0.1 --port 3100",
+    command: `pnpm exec vite dev --host 127.0.0.1 --port ${webServerPort}`,
     url: baseURL,
     reuseExistingServer: false,
     stdout: "pipe",

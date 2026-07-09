@@ -1,7 +1,8 @@
 import type { Track } from "livekit-client";
-import type { SplitState, Whisper } from "@/lib/protocol";
+import type { HandoutSpotlight, SplitState, Whisper } from "@/lib/protocol";
 
 export type GameRole = "gamemaster" | "player";
+export type PlatformRole = "admin" | "user";
 
 export type VideoTileModel = {
   key: string;
@@ -111,6 +112,28 @@ export type VideoGridViewModel = {
 export type VideoGridActions = {
   onToggleParticipantSelection: (participantIdentity: string) => void;
   onToggleSpotlight: (participantIdentity: string | null) => Promise<void>;
+};
+
+export type HandoutControlPanelViewModel = {
+  handout?: HandoutSpotlight;
+  isPublishing: boolean;
+  commandError: string | null;
+};
+
+export type HandoutControlPanelActions = {
+  onBroadcast: (imageUrl: string, title: string) => Promise<CommandResult>;
+  onStop: () => Promise<CommandResult>;
+};
+
+export type HandoutSpotlightViewModel = {
+  handout?: HandoutSpotlight;
+  presenterLabel: string;
+  isMinimized: boolean;
+};
+
+export type HandoutSpotlightActions = {
+  onMinimize: () => void;
+  onRestore: () => void;
 };
 
 export type DevicePanelViewModel = {
