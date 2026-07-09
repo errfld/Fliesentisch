@@ -372,7 +372,7 @@ mod tests {
             &Validation::new(Algorithm::HS256),
         )
         .unwrap();
-        assert_eq!(decoded.claims.video.room, "lobby--dnd-table-1");
+        assert_eq!(decoded.claims.video.room, "__vt_lobby__dnd-table-1");
     }
 
     #[tokio::test]

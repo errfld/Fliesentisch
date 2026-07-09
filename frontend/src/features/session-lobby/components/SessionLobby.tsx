@@ -42,8 +42,11 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
     : undefined;
   const waitingParticipants = lobby.participants.filter((participant) => !participant.ready);
   const isGamemaster = connection.gameRole === "gamemaster";
+  const mediaBusy =
+    media.isInitializing || media.isCameraInitializing || media.isMicToggling || media.isSwitchingDevice;
 
   const enter = async () => {
+    if (mediaBusy) return;
     if (isGamemaster && waitingParticipants.length > 0 && !showNotReadyWarning) {
       setShowNotReadyWarning(true);
       return;
@@ -53,7 +56,7 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
   };
 
   return (
-    <main className="min-h-screen overflow-y-auto bg-[var(--c-void)] px-6 py-8 md:px-10 md:py-12">
+    <div className="min-h-screen overflow-y-auto bg-[var(--c-void)] px-6 py-8 md:px-10 md:py-12">
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--c-rule)] pb-7">
           <div>
@@ -83,8 +86,8 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
                 </div>
               )}
               <div className="absolute bottom-4 left-4 flex gap-2">
-                <span className={`px-3 py-1 text-[10px] uppercase tracking-[0.08em] ${media.micEnabled ? "bg-[var(--c-emerald)] text-black" : "bg-[var(--c-ember)] text-white"}`}>
-                  Mic {media.micEnabled ? "live" : "muted"}
+                <span className={`px-3 py-1 text-[10px] uppercase tracking-[0.08em] ${media.micReady && media.micEnabled ? "bg-[var(--c-emerald)] text-black" : "bg-[var(--c-ember)] text-white"}`}>
+                  Mic {media.isInitializing ? "checking" : media.micReady ? (media.micEnabled ? "live" : "muted") : "unavailable"}
                 </span>
                 <span className="bg-black/70 px-3 py-1 text-[10px] uppercase tracking-[0.08em] text-white/80">
                   Camera {media.cameraEnabled ? "live" : "off"}
@@ -92,11 +95,11 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
               </div>
             </div>
             <div className="grid gap-3 border-t border-[var(--c-rule)] p-5 sm:grid-cols-2">
-              <button className="chip justify-center py-3 text-xs" onClick={() => void media.toggleMic()} type="button">
+              <button className="chip justify-center py-3 text-xs" disabled={!media.micReady || media.isInitializing || media.isMicToggling} onClick={() => void media.toggleMic()} type="button">
                 {media.micEnabled ? "Mute test mic" : "Unmute test mic"}
               </button>
-              <button className="chip justify-center py-3 text-xs" onClick={() => void media.toggleCamera()} type="button">
-                {media.cameraEnabled ? "Stop camera preview" : "Start camera preview"}
+              <button className="chip justify-center py-3 text-xs" disabled={media.isCameraInitializing} onClick={() => void media.toggleCamera()} type="button">
+                {media.isCameraInitializing ? "Checking camera..." : media.cameraEnabled ? "Stop camera preview" : "Start camera preview"}
               </button>
             </div>
             <DevicePanel
@@ -113,12 +116,12 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
                 onSelectVideoDevice: media.onSelectVideoDevice
               }}
             />
-            {media.error ? <p className="border-t border-[var(--c-rule)] p-5 text-sm text-[var(--c-ember)]">{media.error}</p> : null}
+            {media.error ? <p className="border-t border-[var(--c-rule)] p-5 text-sm text-[var(--c-ember)]" role="alert">{media.error}</p> : null}
           </section>
 
           <aside className="border border-[var(--c-rule)] bg-[var(--c-ink)] p-6">
             <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--c-text-faint)]">Readiness board</p>
-            <h2 className="display-face mt-3 text-2xl text-[var(--c-text-warm)]">
+            <h2 aria-live="polite" className="display-face mt-3 text-2xl text-[var(--c-text-warm)]">
               {lobby.participants.filter((participant) => participant.ready).length} of {lobby.participants.length} ready
             </h2>
             <ul className="mt-6 space-y-2" data-testid="lobby-readiness-list">
@@ -140,18 +143,18 @@ export function SessionLobby({ connection, displayName, roomName, onEnter }: Ses
             >
               {lobby.isReady ? "Ready · click to undo" : "I am ready"}
             </button>
-            {lobby.error ? <p className="mt-3 text-xs text-[var(--c-ember)]">{lobby.error}</p> : null}
+            {lobby.error ? <p className="mt-3 text-xs text-[var(--c-ember)]" role="alert">{lobby.error}</p> : null}
             {showNotReadyWarning ? (
               <p className="mt-5 border-l-2 border-[var(--c-gold)] pl-4 text-xs leading-5 text-[var(--c-text-dim)]">
                 {waitingParticipants.length} participant{waitingParticipants.length === 1 ? " is" : "s are"} still setting up. Enter again to start anyway.
               </p>
             ) : null}
-            <button className="act act--gold mt-6 w-full justify-center py-3" data-testid="lobby-enter-room" onClick={() => void enter()} type="button">
+            <button className="act act--gold mt-6 w-full justify-center py-3" data-testid="lobby-enter-room" disabled={mediaBusy} onClick={() => void enter()} type="button">
               {showNotReadyWarning ? "Enter anyway" : "Enter live table"}
             </button>
           </aside>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

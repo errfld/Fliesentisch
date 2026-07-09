@@ -65,6 +65,7 @@ impl CampaignRequest {
         let room_slug = self.room_slug.trim();
         if room_slug.is_empty()
             || room_slug.chars().count() > MAX_ROOM_SLUG_LENGTH
+            || room_slug.starts_with("__vt_")
             || !room_slug
                 .chars()
                 .all(|value| value.is_ascii_alphanumeric() || matches!(value, '-' | '_'))
@@ -295,6 +296,12 @@ mod tests {
             ..valid
         };
         assert!(matches!(invalid.validate(), Err(ApiError::BadRequest(_))));
+
+        let reserved = CampaignRequest {
+            room_slug: "__vt_lobby__table".to_string(),
+            ..invalid
+        };
+        assert!(matches!(reserved.validate(), Err(ApiError::BadRequest(_))));
     }
 
     #[test]
