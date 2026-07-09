@@ -109,6 +109,18 @@ pub(crate) async fn mint_token(
             return Err(ApiError::RoomNotAllowed(req.room.clone()));
         }
         (campaign.room_slug, campaign_role)
+    } else if state
+        .invite_store
+        .is_user_invite_restricted(user.id)
+        .await
+        .map_err(|err| {
+            error!("invite access scope lookup failed: {err}");
+            ApiError::Internal
+        })?
+        && user.platform_role != PlatformRole::Admin
+        && user.game_role != GameRole::Gamemaster
+    {
+        return Err(ApiError::RoomNotAllowed(req.room.clone()));
     } else if let Some(allowed_rooms) = &state.config.allowed_rooms {
         if !allowed_rooms.contains(&req.room) {
             return Err(ApiError::RoomNotAllowed(req.room.clone()));

@@ -15,6 +15,10 @@ pub struct UserStore {
 }
 
 impl UserStore {
+    pub(crate) fn sqlite_pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     pub async fn connect(database_url: &str) -> Result<Self, StoreError> {
         ensure_sqlite_parent_dir(database_url).await?;
 
@@ -759,7 +763,7 @@ impl UserStore {
         Ok(count > 0)
     }
 
-    async fn find_campaign_by_id(
+    pub(crate) async fn find_campaign_by_id(
         &self,
         campaign_id: i64,
     ) -> Result<Option<CampaignPreset>, StoreError> {

@@ -20,6 +20,8 @@ pub(crate) enum ApiError {
     Conflict(String),
     #[error("{0}")]
     NotFound(String),
+    #[error("{0}")]
+    Gone(String),
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error("internal error")]
@@ -40,6 +42,7 @@ impl IntoResponse for ApiError {
             ApiError::Forbidden(_) => (StatusCode::FORBIDDEN, "FORBIDDEN", self.to_string()),
             ApiError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT", self.to_string()),
             ApiError::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND", self.to_string()),
+            ApiError::Gone(_) => (StatusCode::GONE, "GONE", self.to_string()),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", self.to_string()),
             ApiError::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,

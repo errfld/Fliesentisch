@@ -3,6 +3,7 @@ mod auth;
 mod campaigns;
 mod config;
 mod error;
+mod invites;
 mod router;
 mod session;
 mod state;
@@ -15,6 +16,7 @@ use reqwest::Client;
 use tracing::{error, info};
 
 use config::AppConfig;
+use invites::InviteStore;
 use router::build_router;
 use state::AppState;
 use users::UserStore;
@@ -52,6 +54,14 @@ async fn main() {
         std::process::exit(1);
     }
 
+    let invite_store = match InviteStore::initialize(user_store.sqlite_pool()).await {
+        Ok(store) => store,
+        Err(err) => {
+            error!("invite store init error: {err}");
+            std::process::exit(1);
+        }
+    };
+
     let bind_addr: SocketAddr = config
         .bind_addr
         .parse()
@@ -75,6 +85,7 @@ async fn main() {
     let state = Arc::new(AppState {
         http_client,
         config,
+        invite_store,
         user_store,
     });
     let app = build_router(state);

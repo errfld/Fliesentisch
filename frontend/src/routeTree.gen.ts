@@ -13,6 +13,7 @@ import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RoomRoomRouteImport } from './routes/room.$room'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AuthUnauthorizedRouteImport } from './routes/auth.unauthorized'
 
 const CampaignsRoute = CampaignsRouteImport.update({
@@ -35,6 +36,11 @@ const RoomRoomRoute = RoomRoomRouteImport.update({
   path: '/room/$room',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthUnauthorizedRoute = AuthUnauthorizedRouteImport.update({
   id: '/auth/unauthorized',
   path: '/auth/unauthorized',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRoutesById {
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRouteTypes {
@@ -70,15 +79,23 @@ export interface FileRouteTypes {
     | '/admin'
     | '/campaigns'
     | '/auth/unauthorized'
+    | '/invite/$token'
     | '/room/$room'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/campaigns' | '/auth/unauthorized' | '/room/$room'
+  to:
+    | '/'
+    | '/admin'
+    | '/campaigns'
+    | '/auth/unauthorized'
+    | '/invite/$token'
+    | '/room/$room'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/campaigns'
     | '/auth/unauthorized'
+    | '/invite/$token'
     | '/room/$room'
   fileRoutesById: FileRoutesById
 }
@@ -87,6 +104,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   CampaignsRoute: typeof CampaignsRoute
   AuthUnauthorizedRoute: typeof AuthUnauthorizedRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   RoomRoomRoute: typeof RoomRoomRoute
 }
 
@@ -120,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoomRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/unauthorized': {
       id: '/auth/unauthorized'
       path: '/auth/unauthorized'
@@ -135,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   CampaignsRoute: CampaignsRoute,
   AuthUnauthorizedRoute: AuthUnauthorizedRoute,
+  InviteTokenRoute: InviteTokenRoute,
   RoomRoomRoute: RoomRoomRoute,
 }
 export const routeTree = rootRouteImport

@@ -15,7 +15,8 @@ use url::Url;
 
 use crate::{
     config::AppConfig,
-    error::{store_to_api_error, ApiError},
+    error::ApiError,
+    invites::{invite_error_code, invite_to_api_error, invite_token_from_next, InviteStoreError},
     state::AppState,
     users::{AuthUser, PlatformRole, StoreError},
 };
@@ -247,19 +248,17 @@ pub(crate) async fn handle_google_callback(
         return Ok((clear_jar, Redirect::to(&redirect)));
     }
 
-    let user = match state
-        .user_store
-        .authorize_google_user(
-            &google_user.email,
-            &google_user.sub,
-            google_user.name.as_deref(),
-        )
-        .await
+    let user = match authorize_user_for_next(
+        &state,
+        &next,
+        &google_user.email,
+        &google_user.sub,
+        google_user.name.as_deref(),
+    )
+    .await
     {
         Ok(user) => user,
-        Err(StoreError::UnknownUser(_))
-        | Err(StoreError::InactiveUser(_))
-        | Err(StoreError::GoogleSubjectMismatch(_, _)) => {
+        Err(LoginAuthorizationError::AccessDenied) => {
             let redirect = unauthorized_redirect(
                 &state.config,
                 "access_denied",
@@ -267,8 +266,11 @@ pub(crate) async fn handle_google_callback(
             )?;
             return Ok((clear_jar, Redirect::to(&redirect)));
         }
-        Err(err) => {
-            error!("authorize google user error: {err}");
+        Err(LoginAuthorizationError::Invite(err)) => {
+            let redirect = invite_failure_redirect(&state.config, &next, &err)?;
+            return Ok((clear_jar, Redirect::to(&redirect)));
+        }
+        Err(LoginAuthorizationError::Internal) => {
             return Err(ApiError::Internal);
         }
     };
@@ -313,21 +315,77 @@ pub(crate) async fn dev_login(
         .as_deref()
         .filter(|value| !value.trim().is_empty());
 
-    let user = state
-        .user_store
-        .authorize_google_user(
-            &normalized_email,
-            &dev_subject_for_email(&normalized_email),
-            display_name,
-        )
-        .await
-        .map_err(store_to_api_error)?;
+    let user = authorize_user_for_next(
+        &state,
+        &next,
+        &normalized_email,
+        &dev_subject_for_email(&normalized_email),
+        display_name,
+    )
+    .await
+    .map_err(|err| match err {
+        LoginAuthorizationError::AccessDenied => {
+            ApiError::Forbidden("your account is not authorized for this table".to_string())
+        }
+        LoginAuthorizationError::Invite(err) => invite_to_api_error(err),
+        LoginAuthorizationError::Internal => ApiError::Internal,
+    })?;
 
     let jar = create_session_cookie(&state, jar, &user).await?;
     Ok((
         jar,
         Redirect::to(&state.config.absolute_frontend_path(&next)),
     ))
+}
+
+async fn authorize_user_for_next(
+    state: &AppState,
+    next: &str,
+    email: &str,
+    subject: &str,
+    display_name: Option<&str>,
+) -> Result<AuthUser, LoginAuthorizationError> {
+    if let Some(invite_token) = invite_token_from_next(next) {
+        let redeemed = state
+            .invite_store
+            .redeem_invite(invite_token, email, subject, display_name)
+            .await
+            .map_err(LoginAuthorizationError::Invite)?;
+        let user = state
+            .user_store
+            .find_user_by_id(redeemed.user_id)
+            .await
+            .map_err(|err| {
+                error!("invite user lookup failed: {err}");
+                LoginAuthorizationError::Internal
+            })?
+            .ok_or(LoginAuthorizationError::Internal)?;
+        return if user.is_active {
+            Ok(user)
+        } else {
+            Err(LoginAuthorizationError::AccessDenied)
+        };
+    }
+
+    state
+        .user_store
+        .authorize_google_user(email, subject, display_name)
+        .await
+        .map_err(|err| match err {
+            StoreError::UnknownUser(_)
+            | StoreError::InactiveUser(_)
+            | StoreError::GoogleSubjectMismatch(_, _) => LoginAuthorizationError::AccessDenied,
+            other => {
+                error!("authorize google user error: {other}");
+                LoginAuthorizationError::Internal
+            }
+        })
+}
+
+enum LoginAuthorizationError {
+    AccessDenied,
+    Invite(InviteStoreError),
+    Internal,
 }
 
 async fn exchange_google_code(
@@ -464,6 +522,21 @@ fn unauthorized_redirect(
     if let Some(detail) = detail {
         url.query_pairs_mut().append_pair("detail", detail);
     }
+    Ok(url.to_string())
+}
+
+fn invite_failure_redirect(
+    config: &AppConfig,
+    next: &str,
+    error: &InviteStoreError,
+) -> Result<String, ApiError> {
+    let invite_path = config.absolute_frontend_path(next);
+    let mut url = Url::parse(&invite_path).map_err(|err| {
+        error!("invalid invite failure redirect url {invite_path}: {err}");
+        ApiError::Internal
+    })?;
+    url.query_pairs_mut()
+        .append_pair("error", invite_error_code(error));
     Ok(url.to_string())
 }
 
