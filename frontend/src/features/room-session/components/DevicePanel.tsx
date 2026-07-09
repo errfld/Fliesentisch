@@ -1,25 +1,14 @@
 import { useState } from "react";
+import type { DevicePanelActions, DevicePanelViewModel } from "@/features/room-session/types";
 
 type DevicePanelProps = {
-  audioDevices: MediaDeviceInfo[];
-  videoDevices: MediaDeviceInfo[];
-  selectedAudioDevice: string;
-  selectedVideoDevice: string;
-  mirrorSelfView: boolean;
-  onMirrorSelfViewChange: (mirrored: boolean) => void;
-  onSelectAudioDevice: (deviceId: string) => Promise<void>;
-  onSelectVideoDevice: (deviceId: string) => Promise<void>;
+  model: DevicePanelViewModel;
+  actions: DevicePanelActions;
 };
 
 export function DevicePanel({
-  audioDevices,
-  videoDevices,
-  selectedAudioDevice,
-  selectedVideoDevice,
-  mirrorSelfView,
-  onMirrorSelfViewChange,
-  onSelectAudioDevice,
-  onSelectVideoDevice
+  model: { audioDevices, videoDevices, selectedAudioDevice, selectedVideoDevice, mirrorSelfView },
+  actions: { onMirrorSelfViewChange, onSelectAudioDevice, onSelectVideoDevice }
 }: DevicePanelProps) {
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
