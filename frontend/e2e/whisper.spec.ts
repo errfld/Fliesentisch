@@ -270,4 +270,33 @@ test.describe("whisper multi-client flows", () => {
       await bob.context.close();
     }
   });
+
+  test("opens room diagnostics with multi-client subscription state", async ({ browser }) => {
+    const alice = await openParticipant(browser, TEST_ROOM, "Alice");
+    const bob = await openParticipant(browser, TEST_ROOM, "Bob");
+
+    try {
+      await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
+      await Promise.all([
+        waitForVideoPlayback(alice.page, bob.identity),
+        waitForVideoPlayback(bob.page, alice.identity)
+      ]);
+
+      await alice.page.getByRole("button", { name: "Diagnostics" }).click();
+      const diagnostics = alice.page.getByRole("dialog", { name: "Room Diagnostics" });
+      await expect(diagnostics).toBeVisible();
+      await expect(diagnostics.getByTestId("diagnostics-room-id")).toHaveText(TEST_ROOM);
+      await expect(diagnostics.getByTestId("diagnostics-client-id")).toHaveText(alice.identity);
+      await expect(diagnostics.getByTestId("diagnostics-main-audio")).toContainText("1/1");
+      await expect(diagnostics.getByTestId("diagnostics-whisper-audio")).toContainText("0/0");
+      await expect(diagnostics.getByTestId("diagnostics-video")).toContainText("1/1");
+      await expect(bob.page.getByRole("heading", { name: `Room: ${TEST_ROOM}` })).toBeVisible();
+
+      await diagnostics.getByRole("button", { name: "Close diagnostics" }).click();
+      await expect(diagnostics).not.toBeVisible();
+    } finally {
+      await alice.context.close();
+      await bob.context.close();
+    }
+  });
 });

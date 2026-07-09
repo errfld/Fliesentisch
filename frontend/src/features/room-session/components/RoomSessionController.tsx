@@ -1,6 +1,7 @@
 "use client";
 
 import { DevicePanel } from "@/features/room-session/components/DevicePanel";
+import { DiagnosticsPanel } from "@/features/room-session/components/DiagnosticsPanel";
 import { ParticipantRoster } from "@/features/room-session/components/ParticipantRoster";
 import { RemoteAudioLayer } from "@/features/room-session/components/RemoteAudioLayer";
 import { RoomSessionLayout } from "@/features/room-session/components/RoomSessionLayout";
@@ -41,29 +42,32 @@ export function RoomSessionController({ roomName, displayName }: RoomSessionCont
   ) : undefined;
 
   return (
-    <RoomSessionLayout
-      header={<RoomTopBar {...viewModel.topBar} />}
-      main={<VideoGrid {...viewModel.videoGrid} />}
-      sidebar={
-        <SessionSidebar
-          open={viewModel.sidebar.open}
-          splitPanel={splitPanel}
-          whisperPanel={<WhisperPanel {...viewModel.sidebar.whisperPanel} />}
-          rosterPanel={
-            <ParticipantRoster
-              participantRoster={viewModel.sidebar.participantRoster.items}
-              title={viewModel.sidebar.participantRoster.title}
-            />
-          }
-          devicePanel={<DevicePanel {...viewModel.sidebar.devicePanel} />}
-        />
-      }
-      audioLayer={
-        <RemoteAudioLayer
-          audioTracks={viewModel.audioLayer.tracks}
-          mainVolume={viewModel.audioLayer.mainVolume}
-        />
-      }
-    />
+    <>
+      <RoomSessionLayout
+        header={<RoomTopBar {...viewModel.topBar} />}
+        main={<VideoGrid {...viewModel.videoGrid} />}
+        sidebar={
+          <SessionSidebar
+            open={viewModel.sidebar.open}
+            splitPanel={splitPanel}
+            whisperPanel={<WhisperPanel {...viewModel.sidebar.whisperPanel} />}
+            rosterPanel={
+              <ParticipantRoster
+                participantRoster={viewModel.sidebar.participantRoster.items}
+                title={viewModel.sidebar.participantRoster.title}
+              />
+            }
+            devicePanel={<DevicePanel {...viewModel.sidebar.devicePanel} />}
+          />
+        }
+        audioLayer={
+          <RemoteAudioLayer
+            audioTracks={viewModel.audioLayer.tracks}
+            mainVolume={viewModel.audioLayer.mainVolume}
+          />
+        }
+      />
+      {viewModel.diagnostics.open ? <DiagnosticsPanel {...viewModel.diagnostics.panel} /> : null}
+    </>
   );
 }

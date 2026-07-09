@@ -21,7 +21,7 @@ export function RoomTopBar({
     followSpotlight,
     sidebarOpen
   },
-  actions: { onToggleMic, onToggleCamera, onFollowSpotlightChange, onToggleSidebar, onLeave }
+  actions: { onToggleMic, onToggleCamera, onFollowSpotlightChange, onToggleSidebar, onOpenDiagnostics, onLeave }
 }: RoomTopBarProps) {
   return (
     <header className="z-20 flex shrink-0 items-center justify-between gap-6 bg-[var(--c-ink)] px-5 py-2">
@@ -82,6 +82,10 @@ export function RoomTopBar({
         </label>
         <button className="act" onClick={onToggleSidebar} type="button">
           {sidebarOpen ? "Close" : "Panel"}
+        </button>
+        <button aria-haspopup="dialog" className="act act--emerald" onClick={onOpenDiagnostics} type="button">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--c-emerald)] shadow-[0_0_8px_var(--c-emerald)]" />
+          Diagnostics
         </button>
 
         <span className="h-3 w-px bg-[var(--c-rule)]" />
