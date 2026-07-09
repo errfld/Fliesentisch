@@ -4,8 +4,10 @@ use axum::{
     extract::{ConnectInfo, Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::cookie::CookieJar;
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use hmac::{Hmac, KeyInit, Mac};
+use rand::{rngs::SysRng, TryRng};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tracing::error;
@@ -13,10 +15,9 @@ use url::Url;
 
 use crate::{
     config::AppConfig,
-    error::ApiError,
-    random_token, remove_cookie, set_cookie, signed_value, store_to_api_error,
-    users::{AuthUser, StoreError},
-    AppState, SESSION_COOKIE_NAME,
+    error::{store_to_api_error, ApiError},
+    state::AppState,
+    users::{AuthUser, PlatformRole, StoreError},
 };
 
 const OAUTH_STATE_COOKIE_NAME: &str = "vt_oauth_state";
@@ -27,6 +28,116 @@ const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
 const UNAUTHORIZED_PATH: &str = "/auth/unauthorized";
 const DEFAULT_AUTH_REDIRECT: &str = "/";
+pub(crate) const SESSION_COOKIE_NAME: &str = "vt_session";
+
+type HmacSha256 = Hmac<Sha256>;
+
+pub(crate) async fn get_authenticated_user(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<Option<AuthUser>, ApiError> {
+    let Some(session_id) = read_signed_cookie(&state.config, jar, SESSION_COOKIE_NAME) else {
+        return Ok(None);
+    };
+
+    let user = state
+        .user_store
+        .get_session_user(&session_id)
+        .await
+        .map_err(|err| {
+            error!("get session user error: {err}");
+            ApiError::Internal
+        })?;
+
+    Ok(user.filter(|value| value.is_active))
+}
+
+pub(crate) async fn require_authenticated(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<AuthUser, ApiError> {
+    get_authenticated_user(state, jar)
+        .await?
+        .ok_or(ApiError::Unauthenticated)
+}
+
+pub(crate) async fn require_admin(state: &AppState, jar: &CookieJar) -> Result<AuthUser, ApiError> {
+    let user = require_authenticated(state, jar).await?;
+    if user.platform_role != PlatformRole::Admin {
+        return Err(ApiError::Forbidden(
+            "admin access is required for this operation".to_string(),
+        ));
+    }
+
+    Ok(user)
+}
+
+pub(crate) fn set_cookie(
+    config: &AppConfig,
+    jar: CookieJar,
+    name: &str,
+    value: &str,
+    persistent: bool,
+) -> CookieJar {
+    let mut builder = Cookie::build((name.to_string(), value.to_string()))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(config.secure_cookies);
+
+    if persistent {
+        builder = builder.max_age(time::Duration::seconds(config.session_ttl_seconds as i64));
+    }
+
+    jar.add(builder.build())
+}
+
+pub(crate) fn remove_cookie(config: &AppConfig, jar: CookieJar, name: &str) -> CookieJar {
+    jar.remove(
+        Cookie::build((name.to_string(), String::new()))
+            .path("/")
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .secure(config.secure_cookies)
+            .build(),
+    )
+}
+
+pub(crate) fn read_signed_cookie(
+    config: &AppConfig,
+    jar: &CookieJar,
+    name: &str,
+) -> Option<String> {
+    let value = jar.get(name)?.value().to_string();
+    verify_signed_value(&config.cookie_secret, &value)
+}
+
+pub(crate) fn signed_value(secret: &str, value: &str) -> Result<String, ApiError> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| ApiError::Internal)?;
+    mac.update(value.as_bytes());
+    let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    Ok(format!("{value}.{signature}"))
+}
+
+fn verify_signed_value(secret: &str, input: &str) -> Option<String> {
+    let (value, signature) = input.rsplit_once('.')?;
+    let expected_signature = URL_SAFE_NO_PAD.decode(signature.as_bytes()).ok()?;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).ok()?;
+    mac.update(value.as_bytes());
+    mac.verify_slice(&expected_signature).ok()?;
+
+    Some(value.to_string())
+}
+
+pub(crate) fn random_token(num_bytes: usize) -> Result<String, ApiError> {
+    let mut bytes = vec![0_u8; num_bytes];
+    SysRng.try_fill_bytes(&mut bytes).map_err(|err| {
+        error!("secure random generation failed: {err}");
+        ApiError::Internal
+    })?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
 
 pub(crate) async fn start_google_login(
     State(state): State<Arc<AppState>>,
@@ -80,10 +191,10 @@ pub(crate) async fn handle_google_callback(
     jar: CookieJar,
     Query(params): Query<GoogleCallbackQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let next = crate::read_signed_cookie(&state.config, &jar, OAUTH_NEXT_COOKIE_NAME)
+    let next = read_signed_cookie(&state.config, &jar, OAUTH_NEXT_COOKIE_NAME)
         .unwrap_or_else(|| DEFAULT_AUTH_REDIRECT.to_string());
-    let expected_state = crate::read_signed_cookie(&state.config, &jar, OAUTH_STATE_COOKIE_NAME);
-    let pkce_verifier = crate::read_signed_cookie(&state.config, &jar, OAUTH_VERIFIER_COOKIE_NAME);
+    let expected_state = read_signed_cookie(&state.config, &jar, OAUTH_STATE_COOKIE_NAME);
+    let pkce_verifier = read_signed_cookie(&state.config, &jar, OAUTH_VERIFIER_COOKIE_NAME);
     let clear_jar = clear_oauth_cookies(&state.config, jar);
 
     if let Some(error_code) = params.error.as_deref() {

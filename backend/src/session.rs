@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
+    auth::{get_authenticated_user, read_signed_cookie, remove_cookie, SESSION_COOKIE_NAME},
     error::ApiError,
-    get_authenticated_user, read_signed_cookie, remove_cookie,
+    state::AppState,
     users::{AuthUser, GameRole, PlatformRole},
-    AppState, SESSION_COOKIE_NAME,
 };
 
 #[derive(Debug, Serialize, Deserialize)]

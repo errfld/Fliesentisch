@@ -4,6 +4,9 @@ use axum::{
     Json,
 };
 use thiserror::Error;
+use tracing::error;
+
+use crate::users::StoreError;
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
@@ -55,5 +58,21 @@ impl IntoResponse for ApiError {
             })),
         )
             .into_response()
+    }
+}
+
+pub(crate) fn store_to_api_error(err: StoreError) -> ApiError {
+    match err {
+        StoreError::UserNotFound(_) => ApiError::NotFound("user not found".to_string()),
+        StoreError::InvalidEmail(message) => ApiError::BadRequest(message),
+        StoreError::EmailAlreadyExists(message) => ApiError::Conflict(message),
+        StoreError::LastAdminRemoval => ApiError::Conflict(err.to_string()),
+        StoreError::UnknownUser(_) => ApiError::Forbidden(err.to_string()),
+        StoreError::InactiveUser(_) => ApiError::Forbidden(err.to_string()),
+        StoreError::GoogleSubjectMismatch(_, _) => ApiError::Forbidden(err.to_string()),
+        other => {
+            error!("store error: {other}");
+            ApiError::Internal
+        }
     }
 }
