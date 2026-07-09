@@ -1,7 +1,12 @@
 import { Track } from "livekit-client";
 import type { RemoteTrack, Room } from "livekit-client";
 import type { SplitState, Whisper } from "@/lib/protocol";
-import type { AudioTrackModel, ParticipantRosterItem, VideoTileModel } from "@/features/room-session/types";
+import type {
+  AudioTrackModel,
+  ParticipantRosterItem,
+  SplitParticipantOption,
+  VideoTileModel
+} from "@/features/room-session/types";
 import { formatIdentityLabel, getWhisperLabel } from "@/features/room-session/lib/session-helpers";
 
 export const MAIN_SPLIT_ROOM_ID = "main";
@@ -128,12 +133,12 @@ function addDisplayName(displayNames: Map<string, string>, identity: string | un
 }
 
 type BuildParticipantRosterInput = {
-  participantIdentities: string[];
+  participantIdentities: ReadonlyArray<string>;
   participantDisplayNames?: ReadonlyMap<string, string>;
   identity: string;
-  activeSpeakers: Set<string>;
-  videoTiles: VideoTileModel[];
-  activeWhispers: Whisper[];
+  activeSpeakers: ReadonlySet<string>;
+  videoTiles: ReadonlyArray<VideoTileModel>;
+  activeWhispers: ReadonlyArray<Whisper>;
   spotlightIdentity?: string;
 };
 
@@ -176,7 +181,10 @@ export function buildParticipantRoster({
     });
 }
 
-export function orderGridTiles(videoTiles: VideoTileModel[], spotlightIdentity?: string): VideoTileModel[] {
+export function orderGridTiles(
+  videoTiles: ReadonlyArray<VideoTileModel>,
+  spotlightIdentity?: string
+): VideoTileModel[] {
   const ordered = [...videoTiles];
   if (!spotlightIdentity) {
     return ordered;
@@ -212,11 +220,11 @@ type SplitViewInput = {
 };
 
 export function filterParticipantIdentitiesForSplitView(
-  participantIdentities: string[],
+  participantIdentities: ReadonlyArray<string>,
   splitView: SplitViewInput
 ): string[] {
   if (!splitView.splitState.isActive || splitView.viewerIsGamemaster || !splitView.viewerIdentity) {
-    return participantIdentities;
+    return [...participantIdentities];
   }
 
   const viewerRoomId = resolveParticipantRoomId(splitView.splitState, splitView.viewerIdentity);
@@ -234,7 +242,7 @@ export function filterParticipantIdentitiesForSplitView(
 }
 
 export function filterVideoTilesForSplitView(
-  videoTiles: VideoTileModel[],
+  videoTiles: ReadonlyArray<VideoTileModel>,
   splitView: SplitViewInput
 ): VideoTileModel[] {
   const visibleParticipants = new Set(filterParticipantIdentitiesForSplitView(videoTiles.map((tile) => tile.identity), splitView));
@@ -242,11 +250,11 @@ export function filterVideoTilesForSplitView(
 }
 
 export function filterAudioTracksForSplitView(
-  audioTracks: AudioTrackModel[],
+  audioTracks: ReadonlyArray<AudioTrackModel>,
   splitView: SplitViewInput
 ): AudioTrackModel[] {
   if (!splitView.splitState.isActive || splitView.viewerIsGamemaster || !splitView.viewerIdentity) {
-    return audioTracks;
+    return [...audioTracks];
   }
 
   const viewerRoomId = resolveParticipantRoomId(splitView.splitState, splitView.viewerIdentity);
@@ -264,4 +272,101 @@ export function filterAudioTracksForSplitView(
 
     return resolveParticipantRoomId(splitView.splitState, track.identity) === viewerRoomId;
   });
+}
+
+type BuildSplitParticipantOptionsInput = {
+  participantIdentities: ReadonlyArray<string>;
+  participantDisplayNames?: ReadonlyMap<string, string>;
+  viewerIdentity: string;
+  splitState: SplitState;
+};
+
+export function buildSplitParticipantOptions({
+  participantIdentities,
+  participantDisplayNames,
+  viewerIdentity,
+  splitState
+}: BuildSplitParticipantOptionsInput): SplitParticipantOption[] {
+  return participantIdentities
+    .map((participantIdentity) => ({
+      identity: participantIdentity,
+      label: resolveParticipantLabel(participantIdentity, participantDisplayNames),
+      isLocal: participantIdentity === viewerIdentity,
+      roomId: resolveParticipantRoomId(splitState, participantIdentity)
+    }))
+    .sort((left, right) => {
+      if (left.identity === splitState.gmIdentity && right.identity !== splitState.gmIdentity) {
+        return -1;
+      }
+      if (right.identity === splitState.gmIdentity && left.identity !== splitState.gmIdentity) {
+        return 1;
+      }
+      if (left.isLocal && !right.isLocal) {
+        return -1;
+      }
+      if (right.isLocal && !left.isLocal) {
+        return 1;
+      }
+      if (left.roomId !== right.roomId) {
+        return left.roomId.localeCompare(right.roomId);
+      }
+      return left.label.localeCompare(right.label);
+    });
+}
+
+type BuildRoomSessionCollectionsInput = {
+  participantIdentities: ReadonlyArray<string>;
+  participantDisplayNames: ReadonlyMap<string, string>;
+  viewerIdentity: string;
+  viewerIsGamemaster: boolean;
+  activeSpeakers: ReadonlySet<string>;
+  videoTiles: ReadonlyArray<VideoTileModel>;
+  audioTracks: ReadonlyArray<AudioTrackModel>;
+  activeWhispers: ReadonlyArray<Whisper>;
+  spotlightIdentity?: string;
+  splitState: SplitState;
+};
+
+export type RoomSessionCollections = {
+  gridTiles: VideoTileModel[];
+  participantRoster: ParticipantRosterItem[];
+  splitParticipants: SplitParticipantOption[];
+  visibleAudioTracks: AudioTrackModel[];
+};
+
+export function buildRoomSessionCollections({
+  participantIdentities,
+  participantDisplayNames,
+  viewerIdentity,
+  viewerIsGamemaster,
+  activeSpeakers,
+  videoTiles,
+  audioTracks,
+  activeWhispers,
+  spotlightIdentity,
+  splitState
+}: BuildRoomSessionCollectionsInput): RoomSessionCollections {
+  const splitView = { splitState, viewerIdentity, viewerIsGamemaster };
+  const visibleParticipantIdentities = filterParticipantIdentitiesForSplitView(participantIdentities, splitView);
+  const visibleVideoTiles = filterVideoTilesForSplitView(videoTiles, splitView);
+
+  return {
+    gridTiles: orderGridTiles(visibleVideoTiles, spotlightIdentity),
+    participantRoster: buildParticipantRoster({
+      participantIdentities: visibleParticipantIdentities,
+      participantDisplayNames,
+      identity: viewerIdentity,
+      activeSpeakers,
+      videoTiles: visibleVideoTiles,
+      activeWhispers,
+      spotlightIdentity
+    }),
+    splitParticipants: buildSplitParticipantOptions({
+      participantIdentities,
+      participantDisplayNames,
+      viewerIdentity,
+      splitState
+    }),
+    visibleAudioTracks: filterAudioTracksForSplitView(audioTracks, splitView)
+  };
 }

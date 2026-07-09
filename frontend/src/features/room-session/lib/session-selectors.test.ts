@@ -3,6 +3,8 @@ import type { SplitState } from "@/lib/protocol";
 import { formatIdentityLabel, getWhisperLabel } from "@/features/room-session/lib/session-helpers";
 import {
   buildParticipantRoster,
+  buildRoomSessionCollections,
+  buildSplitParticipantOptions,
   filterAudioTracksForSplitView,
   filterParticipantIdentitiesForSplitView,
   orderGridTiles,
@@ -218,5 +220,95 @@ describe("room session selectors", () => {
         viewerIsGamemaster: false
       }).map((track) => track.identity)
     ).toEqual(["gm", "bob"]);
+  });
+
+  it("builds split participant options in GM, local, room, and label order", () => {
+    const splitState: SplitState = {
+      isActive: true,
+      rooms: [
+        { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+        { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+      ],
+      assignments: {
+        alice: "side-1",
+        bob: "main",
+        carol: "side-1"
+      },
+      gmIdentity: "gm",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    };
+
+    const participants = buildSplitParticipantOptions({
+      participantIdentities: ["carol", "bob", "gm", "alice"],
+      participantDisplayNames: new Map([
+        ["alice", "Alice"],
+        ["bob", "Bob"],
+        ["carol", "Carol"],
+        ["gm", "Game Master"]
+      ]),
+      viewerIdentity: "alice",
+      splitState
+    });
+
+    expect(participants.map((participant) => participant.identity)).toEqual(["gm", "alice", "bob", "carol"]);
+    expect(participants.find((participant) => participant.identity === "alice")).toMatchObject({
+      isLocal: true,
+      roomId: "side-1"
+    });
+  });
+
+  it("builds the visible room-session collections at one tested boundary", () => {
+    const splitState: SplitState = {
+      isActive: true,
+      rooms: [
+        { id: "main", name: "Main Table", kind: "main", updatedAt: 10 },
+        { id: "side-1", name: "Library", kind: "side", updatedAt: 10 }
+      ],
+      assignments: {
+        alice: "main",
+        bob: "side-1"
+      },
+      gmIdentity: "gm",
+      gmFocusRoomId: "main",
+      gmBroadcastActive: false,
+      updatedAt: 10
+    };
+    const videoTiles: VideoTileModel[] = ["alice", "bob", "gm"].map((identity) => ({
+      key: `${identity}-track`,
+      identity,
+      trackSid: `${identity}-track`,
+      track: {} as VideoTileModel["track"],
+      isLocal: identity === "alice"
+    }));
+    const audioTracks: AudioTrackModel[] = ["bob", "gm"].map((identity) => ({
+      key: `${identity}-audio`,
+      identity,
+      track: {} as AudioTrackModel["track"],
+      isMain: true
+    }));
+
+    const collections = buildRoomSessionCollections({
+      participantIdentities: ["alice", "bob", "gm"],
+      participantDisplayNames: new Map([
+        ["alice", "Alice"],
+        ["bob", "Bob"],
+        ["gm", "Game Master"]
+      ]),
+      viewerIdentity: "alice",
+      viewerIsGamemaster: false,
+      activeSpeakers: new Set(["gm"]),
+      videoTiles,
+      audioTracks,
+      activeWhispers: [],
+      spotlightIdentity: "gm",
+      splitState
+    });
+
+    expect(collections.gridTiles.map((tile) => tile.identity)).toEqual(["gm", "alice"]);
+    expect(collections.participantRoster.map((participant) => participant.identity)).toEqual(["gm", "alice"]);
+    expect(collections.participantRoster[0]).toMatchObject({ isSpeaking: true, isSpotlight: true });
+    expect(collections.visibleAudioTracks.map((track) => track.identity)).toEqual(["gm"]);
+    expect(collections.splitParticipants.map((participant) => participant.identity)).toEqual(["gm", "alice", "bob"]);
   });
 });

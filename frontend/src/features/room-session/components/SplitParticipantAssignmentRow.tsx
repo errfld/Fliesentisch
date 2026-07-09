@@ -1,19 +1,14 @@
 import { resolveParticipantRoomId } from "@/features/room-session/lib/session-selectors";
+import type { CommandResult, SplitParticipantOption } from "@/features/room-session/types";
 import type { SplitRoom, SplitState } from "@/lib/protocol";
-
-export type SplitParticipantOption = {
-  identity: string;
-  label: string;
-  isLocal: boolean;
-};
 
 type SplitParticipantAssignmentRowProps = {
   participant: SplitParticipantOption;
-  rooms: SplitRoom[];
+  rooms: ReadonlyArray<SplitRoom>;
   splitState: SplitState;
   disabled: boolean;
   isPinnedToGmRole: boolean;
-  onAssignParticipantToRoom: (participantIdentity: string, roomId: string) => Promise<boolean>;
+  onAssignParticipantToRoom: (participantIdentity: string, roomId: string) => Promise<CommandResult>;
 };
 
 export function SplitParticipantAssignmentRow({
