@@ -1,38 +1,26 @@
 import { useState } from "react";
 import { SplitParticipantAssignmentRow } from "@/features/room-session/components/SplitParticipantAssignmentRow";
-import type { SplitParticipantOption } from "@/features/room-session/components/SplitParticipantAssignmentRow";
 import { resolveParticipantRoomId } from "@/features/room-session/lib/session-selectors";
 import { canAddSideRoom } from "@/features/room-session/lib/split-room-rules";
-import type { SplitState } from "@/lib/protocol";
+import type { SplitControlPanelActions, SplitControlPanelViewModel } from "@/features/room-session/types";
 
 type SplitControlPanelProps = {
-  splitState: SplitState;
-  participants: SplitParticipantOption[];
-  isPublishingCommand: boolean;
-  commandError: string | null;
-  onStartSplit: () => Promise<boolean>;
-  onAddRoom: () => Promise<boolean>;
-  onRemoveRoom: (roomId: string) => Promise<boolean>;
-  onRenameRoom: (roomId: string, roomName: string) => Promise<boolean>;
-  onAssignParticipantToRoom: (participantIdentity: string, roomId: string) => Promise<boolean>;
-  onSetGmFocusRoom: (roomId: string | null) => Promise<boolean>;
-  onSetGmBroadcastActive: (active: boolean) => Promise<boolean>;
-  onEndSplit: () => Promise<boolean>;
+  model: SplitControlPanelViewModel;
+  actions: SplitControlPanelActions;
 };
 
 export function SplitControlPanel({
-  splitState,
-  participants,
-  isPublishingCommand,
-  commandError,
-  onStartSplit,
-  onAddRoom,
-  onRemoveRoom,
-  onRenameRoom,
-  onAssignParticipantToRoom,
-  onSetGmFocusRoom,
-  onSetGmBroadcastActive,
-  onEndSplit
+  model: { splitState, participants, isPublishingCommand, commandError },
+  actions: {
+    onStartSplit,
+    onAddRoom,
+    onRemoveRoom,
+    onRenameRoom,
+    onAssignParticipantToRoom,
+    onSetGmFocusRoom,
+    onSetGmBroadcastActive,
+    onEndSplit
+  }
 }: SplitControlPanelProps) {
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [draftRoomName, setDraftRoomName] = useState("");
@@ -132,8 +120,8 @@ export function SplitControlPanel({
                                 className="act act--gold"
                                 disabled={isPublishingCommand}
                                 onClick={() => {
-                                  void onRenameRoom(room.id, draftRoomName).then((didRename) => {
-                                    if (didRename) {
+                                  void onRenameRoom(room.id, draftRoomName).then((result) => {
+                                    if (result.ok) {
                                       setEditingRoomId(null);
                                       setDraftRoomName("");
                                     }
@@ -213,4 +201,3 @@ export function SplitControlPanel({
     </section>
   );
 }
-

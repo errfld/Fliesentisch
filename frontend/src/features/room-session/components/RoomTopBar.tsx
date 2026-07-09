@@ -1,35 +1,27 @@
 import { formatIdentityLabel } from "@/features/room-session/lib/session-helpers";
-import type { RoomSessionControls } from "@/features/room-session/types";
+import type { RoomTopBarActions, RoomTopBarViewModel } from "@/features/room-session/types";
 
-type RoomTopBarProps = RoomSessionControls & {
-  roomName: string;
-  displayName: string;
-  identity: string;
-  participantCount: number;
-  activeWhisperCount: number;
-  currentRoomName?: string;
-  splitActive: boolean;
-  spotlightIdentity?: string;
+type RoomTopBarProps = {
+  model: RoomTopBarViewModel;
+  actions: RoomTopBarActions;
 };
 
 export function RoomTopBar({
-  roomName,
-  displayName,
-  identity,
-  participantCount,
-  activeWhisperCount,
-  currentRoomName,
-  splitActive,
-  spotlightIdentity,
-  micEnabled,
-  cameraEnabled,
-  followSpotlight,
-  sidebarOpen,
-  onToggleMic,
-  onToggleCamera,
-  onFollowSpotlightChange,
-  onToggleSidebar,
-  onLeave
+  model: {
+    roomName,
+    displayName,
+    identity,
+    participantCount,
+    activeWhisperCount,
+    currentRoomName,
+    splitActive,
+    spotlightIdentity,
+    micEnabled,
+    cameraEnabled,
+    followSpotlight,
+    sidebarOpen
+  },
+  actions: { onToggleMic, onToggleCamera, onFollowSpotlightChange, onToggleSidebar, onLeave }
 }: RoomTopBarProps) {
   return (
     <header className="z-20 flex shrink-0 items-center justify-between gap-6 bg-[var(--c-ink)] px-5 py-2">

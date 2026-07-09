@@ -1,29 +1,23 @@
-import type { VideoTileModel } from "@/features/room-session/types";
+import type { VideoGridActions, VideoGridViewModel } from "@/features/room-session/types";
 import { VideoTile } from "@/features/room-session/components/VideoTile";
 import { resolveParticipantLabel } from "@/features/room-session/lib/session-selectors";
 
 type VideoGridProps = {
-  gridTiles: VideoTileModel[];
-  gridCount: number;
-  spotlightIdentity?: string;
-  activeSpeakers: Set<string>;
-  participantDisplayNames: ReadonlyMap<string, string>;
-  selectedParticipantIds: Set<string>;
-  mirrorSelfView: boolean;
-  onToggleParticipantSelection: (participantIdentity: string) => void;
-  onToggleSpotlight: (targetIdentity: string | null) => Promise<void>;
+  model: VideoGridViewModel;
+  actions: VideoGridActions;
 };
 
 export function VideoGrid({
-  gridTiles,
-  gridCount,
-  spotlightIdentity,
-  activeSpeakers,
-  participantDisplayNames,
-  selectedParticipantIds,
-  mirrorSelfView,
-  onToggleParticipantSelection,
-  onToggleSpotlight
+  model: {
+    gridTiles,
+    gridCount,
+    spotlightIdentity,
+    activeSpeakers,
+    participantDisplayNames,
+    selectedParticipantIds,
+    mirrorSelfView
+  },
+  actions: { onToggleParticipantSelection, onToggleSpotlight }
 }: VideoGridProps) {
   return (
     <section className="relative min-w-0 flex-1">

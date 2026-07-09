@@ -1,30 +1,29 @@
-import type { Whisper } from "@/lib/protocol";
-import type { WhisperPanelState } from "@/features/room-session/types";
+import type { WhisperPanelActions, WhisperPanelViewModel } from "@/features/room-session/types";
 import { formatIdentityLabel, getWhisperLabel } from "@/features/room-session/lib/session-helpers";
 
-type WhisperPanelProps = WhisperPanelState & {
-  onCreateWhisper: () => Promise<void>;
-  onSelectWhisper: (whisperId?: string) => void;
-  onJoinWhisper: (whisper: Whisper) => Promise<void>;
-  onAddSelectedParticipants: (whisper: Whisper) => Promise<void>;
-  onLeaveWhisper: (whisper: Whisper) => Promise<void>;
-  onCloseWhisper: (whisper: Whisper) => Promise<void>;
+type WhisperPanelProps = {
+  model: WhisperPanelViewModel;
+  actions: WhisperPanelActions;
 };
 
 export function WhisperPanel({
-  activeWhispers,
-  selectedWhisperId,
-  selectedWhisper,
-  selectedParticipants,
-  whisperNotice,
-  isPttActive,
-  identity,
-  onCreateWhisper,
-  onSelectWhisper,
-  onJoinWhisper,
-  onAddSelectedParticipants,
-  onLeaveWhisper,
-  onCloseWhisper
+  model: {
+    activeWhispers,
+    selectedWhisperId,
+    selectedWhisper,
+    selectedParticipants,
+    whisperNotice,
+    isPttActive,
+    identity
+  },
+  actions: {
+    onCreateWhisper,
+    onSelectWhisper,
+    onJoinWhisper,
+    onAddSelectedParticipants,
+    onLeaveWhisper,
+    onCloseWhisper
+  }
 }: WhisperPanelProps) {
   return (
     <>
