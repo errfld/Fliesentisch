@@ -26,6 +26,24 @@ export type SplitState = {
   updatedAt: number;
 };
 
+export const MAX_HANDOUT_URL_LENGTH = 2048;
+export const MAX_HANDOUT_TITLE_LENGTH = 80;
+
+export type HandoutPresenterRole = "gamemaster" | "admin";
+
+export type HandoutSpotlight = {
+  imageUrl: string;
+  title?: string;
+  presenterIdentity: string;
+  presenterRole: HandoutPresenterRole;
+  updatedAt: number;
+};
+
+export type HandoutSpotlightStatePayload = {
+  handout: HandoutSpotlight | null;
+  updatedAt: number;
+};
+
 export type ProtocolEventType =
   | "STATE_REQUEST"
   | "STATE_SNAPSHOT"
@@ -33,6 +51,9 @@ export type ProtocolEventType =
   | "WHISPER_UPDATE"
   | "WHISPER_CLOSE"
   | "SPOTLIGHT_UPDATE"
+  | "HANDOUT_STATE_REQUEST"
+  | "HANDOUT_STATE_SNAPSHOT"
+  | "HANDOUT_SPOTLIGHT_UPDATE"
   | "SPLIT_STATE_REQUEST"
   | "SPLIT_STATE_SNAPSHOT"
   | "SPLIT_START"
@@ -94,6 +115,9 @@ export type ProtocolPayloadByType = {
   WHISPER_UPDATE: Whisper;
   WHISPER_CLOSE: WhisperClosePayload;
   SPOTLIGHT_UPDATE: SpotlightPayload;
+  HANDOUT_STATE_REQUEST: Record<string, never>;
+  HANDOUT_STATE_SNAPSHOT: HandoutSpotlightStatePayload;
+  HANDOUT_SPOTLIGHT_UPDATE: HandoutSpotlightStatePayload;
   SPLIT_STATE_REQUEST: Record<string, never>;
   SPLIT_STATE_SNAPSHOT: SplitStateSnapshotPayload;
   SPLIT_START: SplitStateSnapshotPayload;
@@ -182,6 +206,9 @@ const protocolPayloadValidators: {
   WHISPER_UPDATE: isWhisper,
   WHISPER_CLOSE: isWhisperClosePayload,
   SPOTLIGHT_UPDATE: isSpotlightPayload,
+  HANDOUT_STATE_REQUEST: isEmptyRecord,
+  HANDOUT_STATE_SNAPSHOT: isHandoutSpotlightStatePayload,
+  HANDOUT_SPOTLIGHT_UPDATE: isHandoutSpotlightStatePayload,
   SPLIT_STATE_REQUEST: isEmptyRecord,
   SPLIT_STATE_SNAPSHOT: isSplitStateSnapshotPayload,
   SPLIT_START: isSplitStateSnapshotPayload,
@@ -222,6 +249,44 @@ function isWhisperClosePayload(payload: unknown): payload is WhisperClosePayload
 
 function isSpotlightPayload(payload: unknown): payload is SpotlightPayload {
   return isRecord(payload) && isNullableString(payload.identity) && isFiniteNumber(payload.updatedAt);
+}
+
+function isHandoutSpotlightStatePayload(payload: unknown): payload is HandoutSpotlightStatePayload {
+  if (!isRecord(payload) || !isFiniteNumber(payload.updatedAt)) {
+    return false;
+  }
+  if (payload.handout === null) {
+    return true;
+  }
+  return isHandoutSpotlight(payload.handout) && payload.handout.updatedAt === payload.updatedAt;
+}
+
+function isHandoutSpotlight(payload: unknown): payload is HandoutSpotlight {
+  return (
+    isRecord(payload) &&
+    isWebImageUrl(payload.imageUrl) &&
+    (payload.title === undefined ||
+      (typeof payload.title === "string" &&
+        payload.title.length > 0 &&
+        payload.title.length <= MAX_HANDOUT_TITLE_LENGTH)) &&
+    typeof payload.presenterIdentity === "string" &&
+    payload.presenterIdentity.length > 0 &&
+    (payload.presenterRole === "gamemaster" || payload.presenterRole === "admin") &&
+    isFiniteNumber(payload.updatedAt)
+  );
+}
+
+function isWebImageUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_HANDOUT_URL_LENGTH) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function isSplitStateSnapshotPayload(payload: unknown): payload is SplitStateSnapshotPayload {

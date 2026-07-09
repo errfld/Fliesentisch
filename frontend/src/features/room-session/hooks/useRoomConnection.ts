@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DisconnectReason, Room, RoomEvent } from "livekit-client";
-import type { GameRole } from "@/features/room-session/types";
+import type { GameRole, PlatformRole } from "@/features/room-session/types";
 import {
   areSetsEqual,
   formatConnectionError,
@@ -24,6 +24,7 @@ const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
 
 export function useRoomConnection({ roomName, displayName }: UseRoomConnectionInput) {
   const [gameRole, setGameRole] = useState<GameRole | undefined>(undefined);
+  const [platformRole, setPlatformRole] = useState<PlatformRole | undefined>(undefined);
   const [token, setToken] = useState("");
   const [identity, setIdentity] = useState("");
   const [room, setRoom] = useState<Room | null>(null);
@@ -37,6 +38,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
   useEffect(() => {
     if (!displayName.trim()) {
       setGameRole(undefined);
+      setPlatformRole(undefined);
       setToken("");
       setIdentity("");
       setRoom(null);
@@ -48,6 +50,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
 
     const controller = new AbortController();
     setGameRole(undefined);
+    setPlatformRole(undefined);
     setToken("");
     setIdentity("");
     setIsConnecting(true);
@@ -74,6 +77,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
         }
 
         setGameRole(normalizeGameRole(body?.game_role));
+        setPlatformRole(normalizePlatformRole(body?.platform_role));
         setIdentity(body.identity ?? "");
         setToken(body.token);
       } catch (err) {
@@ -192,6 +196,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
     disconnect: () => room?.disconnect(),
     error,
     gameRole,
+    platformRole,
     identity,
     isConnecting,
     renderVersion,
@@ -200,5 +205,17 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
 }
 
 function normalizeGameRole(value: unknown): GameRole | undefined {
-  return value === "gamemaster" || value === "player" ? value : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.toLowerCase();
+  return normalized === "gamemaster" || normalized === "player" ? normalized : undefined;
+}
+
+function normalizePlatformRole(value: unknown): PlatformRole | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.toLowerCase();
+  return normalized === "admin" || normalized === "user" ? normalized : undefined;
 }

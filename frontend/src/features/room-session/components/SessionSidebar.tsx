@@ -2,13 +2,14 @@ import type { ReactNode } from "react";
 
 type SessionSidebarProps = {
   open: boolean;
+  handoutPanel?: ReactNode;
   splitPanel?: ReactNode;
   whisperPanel: ReactNode;
   rosterPanel: ReactNode;
   devicePanel: ReactNode;
 };
 
-export function SessionSidebar({ open, splitPanel, whisperPanel, rosterPanel, devicePanel }: SessionSidebarProps) {
+export function SessionSidebar({ open, handoutPanel, splitPanel, whisperPanel, rosterPanel, devicePanel }: SessionSidebarProps) {
   return (
     <aside
       className={`z-10 flex shrink-0 flex-col bg-[var(--c-ink)] transition-[width] duration-300 ${
@@ -16,6 +17,8 @@ export function SessionSidebar({ open, splitPanel, whisperPanel, rosterPanel, de
       }`}
     >
       <div className="sidebar-scroll flex flex-1 flex-col overflow-y-auto">
+        {handoutPanel}
+        {handoutPanel ? <div className="mx-5 h-px bg-[var(--c-rule)]" /> : null}
         {splitPanel}
         {splitPanel ? <div className="mx-5 h-px bg-[var(--c-rule)]" /> : null}
         {whisperPanel}

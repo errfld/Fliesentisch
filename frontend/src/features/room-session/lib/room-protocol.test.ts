@@ -9,14 +9,16 @@ import {
 import { createEnvelope } from "@/lib/protocol";
 
 describe("room protocol router", () => {
-  it("routes whisper and split envelopes only to their typed subscribers", () => {
+  it("routes whisper, handout, and split envelopes only to their typed subscribers", () => {
     const router = createRoomProtocolRouter();
     const whisperHandler = vi.fn();
     const whisperObserver = vi.fn();
     const splitHandler = vi.fn();
+    const handoutHandler = vi.fn();
     const unsubscribeWhisper = router.subscribe("WHISPER_CREATE", whisperHandler);
     router.subscribe("WHISPER_CREATE", whisperObserver);
     router.subscribe("SPLIT_STATE_SNAPSHOT", splitHandler);
+    router.subscribe("HANDOUT_SPOTLIGHT_UPDATE", handoutHandler);
 
     const whisperEnvelope = createEnvelope("WHISPER_CREATE", "alice", {
       id: "whisper-1",
@@ -37,8 +39,17 @@ describe("room protocol router", () => {
     });
     const gmParticipant = {
       identity: "gm",
-      attributes: { game_role: "gamemaster" }
+      attributes: { game_role: "gamemaster", platform_role: "user" }
     } as unknown as Participant;
+    const handoutEnvelope = createEnvelope("HANDOUT_SPOTLIGHT_UPDATE", "gm", {
+      handout: {
+        imageUrl: "https://example.com/scene.jpg",
+        presenterIdentity: "gm",
+        presenterRole: "gamemaster",
+        updatedAt: 30
+      },
+      updatedAt: 30
+    });
 
     expect(router.route(encodeRoomProtocolEnvelope(whisperEnvelope))).toBe(true);
     expect(whisperHandler).toHaveBeenCalledWith(
@@ -54,6 +65,13 @@ describe("room protocol router", () => {
       senderIdentity: "gm"
     });
     expect(whisperHandler).toHaveBeenCalledTimes(1);
+    expect(handoutHandler).not.toHaveBeenCalled();
+
+    expect(router.route(encodeRoomProtocolEnvelope(handoutEnvelope), gmParticipant)).toBe(true);
+    expect(handoutHandler).toHaveBeenCalledWith(handoutEnvelope, {
+      participant: gmParticipant,
+      senderIdentity: "gm"
+    });
 
     unsubscribeWhisper();
     router.route(encodeRoomProtocolEnvelope(whisperEnvelope));
