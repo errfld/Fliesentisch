@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RoomRoomRouteImport } from './routes/room.$room'
 import { Route as AuthUnauthorizedRouteImport } from './routes/auth.unauthorized'
 
+const CampaignsRoute = CampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -38,12 +44,14 @@ const AuthUnauthorizedRoute = AuthUnauthorizedRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
@@ -51,26 +59,46 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/campaigns': typeof CampaignsRoute
   '/auth/unauthorized': typeof AuthUnauthorizedRoute
   '/room/$room': typeof RoomRoomRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/campaigns'
+    | '/auth/unauthorized'
+    | '/room/$room'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
-  id: '__root__' | '/' | '/admin' | '/auth/unauthorized' | '/room/$room'
+  to: '/' | '/admin' | '/campaigns' | '/auth/unauthorized' | '/room/$room'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/campaigns'
+    | '/auth/unauthorized'
+    | '/room/$room'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  CampaignsRoute: typeof CampaignsRoute
   AuthUnauthorizedRoute: typeof AuthUnauthorizedRoute
   RoomRoomRoute: typeof RoomRoomRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/campaigns': {
+      id: '/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof CampaignsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -105,6 +133,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  CampaignsRoute: CampaignsRoute,
   AuthUnauthorizedRoute: AuthUnauthorizedRoute,
   RoomRoomRoute: RoomRoomRoute,
 }

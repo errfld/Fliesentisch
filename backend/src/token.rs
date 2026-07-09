@@ -13,7 +13,7 @@ use crate::{
     auth::require_authenticated,
     error::ApiError,
     state::AppState,
-    users::{GameRole, MAX_DISPLAY_NAME_LENGTH},
+    users::{GameRole, PlatformRole, MAX_DISPLAY_NAME_LENGTH},
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -81,11 +81,40 @@ pub(crate) async fn mint_token(
     req.validate()?;
     let user = require_authenticated(&state, &jar).await?;
 
-    if let Some(allowed_rooms) = &state.config.allowed_rooms {
+    let campaign = state
+        .user_store
+        .find_campaign_by_room_slug(&req.room)
+        .await
+        .map_err(|err| {
+            error!("campaign room lookup failed: {err}");
+            ApiError::Internal
+        })?;
+    let (room, effective_game_role) = if let Some(campaign) = campaign {
+        let membership_role = state
+            .user_store
+            .campaign_role_for_user(campaign.id, user.id)
+            .await
+            .map_err(|err| {
+                error!("campaign membership lookup failed: {err}");
+                ApiError::Internal
+            })?;
+        let campaign_role = if user.platform_role == PlatformRole::Admin {
+            GameRole::Gamemaster
+        } else {
+            membership_role.ok_or_else(|| ApiError::RoomNotAllowed(req.room.clone()))?
+        };
+        if campaign.is_archived {
+            return Err(ApiError::RoomNotAllowed(req.room.clone()));
+        }
+        (campaign.room_slug, campaign_role)
+    } else if let Some(allowed_rooms) = &state.config.allowed_rooms {
         if !allowed_rooms.contains(&req.room) {
             return Err(ApiError::RoomNotAllowed(req.room.clone()));
         }
-    }
+        (req.room.clone(), user.game_role)
+    } else {
+        (req.room.clone(), user.game_role)
+    };
 
     let google_subject = user.google_subject.clone().ok_or_else(|| {
         ApiError::Forbidden("authenticated user is missing Google identity".to_string())
@@ -115,7 +144,7 @@ pub(crate) async fn mint_token(
         exp: expiry.timestamp(),
         video: LiveKitVideoGrant {
             room_join: true,
-            room: req.room,
+            room,
             can_publish: true,
             can_subscribe: true,
         },
@@ -134,7 +163,7 @@ pub(crate) async fn mint_token(
             token,
             expires_at: expiry,
             identity: claims.sub,
-            game_role: updated_user.game_role,
+            game_role: effective_game_role,
         }),
     ))
 }

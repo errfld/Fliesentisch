@@ -2,18 +2,31 @@ import { Link } from "@tanstack/react-router";
 import { JoinForm } from "@/components/JoinForm";
 import { buildGoogleLoginUrl } from "@/features/auth/lib/auth-api";
 import type { SessionUser } from "@/features/auth/types";
+import type { CampaignPreset } from "@/features/campaigns/types";
 
 type AuthLandingProps = {
+  campaigns?: CampaignPreset[];
+  campaignsError?: string | null;
+  campaignsLoading?: boolean;
   user?: SessionUser;
   onLogout: () => void;
   isLoggingOut: boolean;
+  onRetryCampaigns?: () => void;
 };
 
 function fallbackName(user?: SessionUser) {
   return user?.display_name?.trim() || user?.email.split("@")[0] || "Player";
 }
 
-export function AuthLanding({ user, onLogout, isLoggingOut }: AuthLandingProps) {
+export function AuthLanding({
+  campaigns,
+  campaignsError,
+  campaignsLoading,
+  user,
+  onLogout,
+  onRetryCampaigns,
+  isLoggingOut
+}: AuthLandingProps) {
   const currentPath =
     typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`;
   const loginHref = buildGoogleLoginUrl(currentPath);
@@ -86,10 +99,21 @@ export function AuthLanding({ user, onLogout, isLoggingOut }: AuthLandingProps) 
             </div>
 
             <div className="mt-6 border-t border-[var(--c-rule)] pt-6">
-              <JoinForm initialName={fallbackName(user)} />
+              <JoinForm
+                campaigns={campaigns}
+                campaignsError={campaignsError}
+                campaignsLoading={campaignsLoading}
+                initialName={fallbackName(user)}
+                onRetryCampaigns={onRetryCampaigns}
+              />
             </div>
 
             <div className="mt-6 flex flex-wrap gap-4 border-t border-[var(--c-rule)] pt-4">
+              {user.platform_role === "ADMIN" || user.game_role === "GAMEMASTER" ? (
+                <Link className="act act--gold" to="/campaigns">
+                  Manage campaigns
+                </Link>
+              ) : null}
               {user.platform_role === "ADMIN" ? (
                 <Link className="act act--gold" to="/admin">
                   Manage access

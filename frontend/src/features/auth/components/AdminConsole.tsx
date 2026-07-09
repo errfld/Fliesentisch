@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAdminUsers } from "@/features/auth/hooks/useAdminUsers";
 import type { AdminUser, GameRole, PlatformRole, SessionUser } from "@/features/auth/types";
+import { CampaignAdminPanel } from "@/features/campaigns/components/CampaignAdminPanel";
 
 type AdminConsoleProps = {
   currentUser: SessionUser;
@@ -181,6 +182,7 @@ export function AdminConsole({ currentUser }: AdminConsoleProps) {
             ))}
           </div>
         </section>
+        <CampaignAdminPanel users={users} />
       </div>
     </main>
   );

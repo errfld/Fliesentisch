@@ -68,7 +68,7 @@ jobs:
       AUTH_DATABASE_URL: sqlite:///tmp/virtual-table-auth-e2e.db?mode=rwc
       AUTH_ENABLE_DEV_LOGIN: "true"
       AUTH_BOOTSTRAP_ADMIN_EMAILS: gm@example.com
-      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: gm@example.com
+      AUTH_BOOTSTRAP_GAMEMASTER_EMAILS: gm@example.com,keeper@example.com
       AUTH_BOOTSTRAP_PLAYER_EMAILS: alice@example.com,bob@example.com,carol@example.com
       GOOGLE_CLIENT_ID: e2e-client
       GOOGLE_CLIENT_SECRET: e2e-secret

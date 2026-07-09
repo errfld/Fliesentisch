@@ -19,6 +19,10 @@ use tracing::error;
 use crate::{
     admin::{create_admin_user, delete_admin_user, list_admin_users, update_admin_user},
     auth::{dev_login, handle_google_callback, start_google_login},
+    campaigns::{
+        archive_campaign, create_campaign, list_available_campaigns, list_campaign_directory,
+        list_managed_campaigns, update_campaign,
+    },
     error::ApiError,
     session::{get_session, logout},
     state::AppState,
@@ -33,6 +37,19 @@ pub(crate) fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/auth/google/callback", get(handle_google_callback))
         .route("/api/v1/auth/dev-login", get(dev_login))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/campaigns", get(list_available_campaigns))
+        .route(
+            "/api/v1/campaigns/manage",
+            get(list_managed_campaigns).post(create_campaign),
+        )
+        .route(
+            "/api/v1/campaigns/manage/users",
+            get(list_campaign_directory),
+        )
+        .route(
+            "/api/v1/campaigns/manage/{campaign_id}",
+            patch(update_campaign).delete(archive_campaign),
+        )
         .route(
             "/api/v1/admin/users",
             get(list_admin_users).post(create_admin_user),
@@ -89,7 +106,7 @@ mod tests {
         auth::{random_token, signed_value, SESSION_COOKIE_NAME},
         config::{parse_optional_set, AppConfig},
         token::{derive_room_identity, LiveKitClaims, TokenResponse},
-        users::{build_bootstrap_users, UserStore},
+        users::{build_bootstrap_users, CampaignPreset, UserStore},
     };
     use axum::{body::Body, http::Request, http::StatusCode};
     use chrono::{Duration, Utc};
@@ -102,8 +119,14 @@ mod tests {
         let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
         let bootstrap_users = build_bootstrap_users(
             &["gm@example.com".to_string()],
-            &["gm@example.com".to_string()],
-            &["player@example.com".to_string()],
+            &[
+                "gm@example.com".to_string(),
+                "other-gm@example.com".to_string(),
+            ],
+            &[
+                "player@example.com".to_string(),
+                "outsider@example.com".to_string(),
+            ],
         )
         .unwrap();
         user_store
@@ -392,5 +415,235 @@ mod tests {
             .users
             .iter()
             .any(|user| user.email == "new@example.com"));
+    }
+
+    #[tokio::test]
+    async fn campaign_crud_scopes_room_tokens_to_members() {
+        let state = test_state().await;
+        let admin_cookie = session_cookie_for(&state, "gm@example.com", "google-gm").await;
+        let player_cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
+        let outsider_cookie =
+            session_cookie_for(&state, "outsider@example.com", "google-outsider").await;
+        let gm = state
+            .user_store
+            .find_user_by_email("gm@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        let player = state
+            .user_store
+            .find_user_by_email("player@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        let app = build_router(state);
+        let create_payload = serde_json::json!({
+            "display_name": "Thursday Night",
+            "room_slug": "Thursday-Night",
+            "gamemaster_user_ids": [gm.id],
+            "player_user_ids": [player.id],
+            "default_split_room_names": ["Library"]
+        });
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/campaigns/manage")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", &admin_cookie)
+                    .body(Body::from(create_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(create_response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(create_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let campaign: CampaignPreset = serde_json::from_slice(&body).unwrap();
+        assert_eq!(campaign.room_slug, "thursday-night");
+
+        let token_payload = serde_json::json!({ "room": "Thursday-Night", "name": "Alice" });
+        let member_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", &player_cookie)
+                    .body(Body::from(token_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(member_response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(member_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let token: TokenResponse = serde_json::from_slice(&body).unwrap();
+        let decoded = decode::<LiveKitClaims>(
+            &token.token,
+            &DecodingKey::from_secret("devsecret".as_bytes()),
+            &Validation::new(Algorithm::HS256),
+        )
+        .unwrap();
+        assert_eq!(decoded.claims.video.room, "thursday-night");
+
+        let outsider_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", outsider_cookie)
+                    .body(Body::from(token_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(outsider_response.status(), StatusCode::FORBIDDEN);
+
+        let archive_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/api/v1/campaigns/manage/{}", campaign.id))
+                    .method("DELETE")
+                    .header("cookie", admin_cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(archive_response.status(), StatusCode::NO_CONTENT);
+
+        let archived_room_response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", player_cookie)
+                    .body(Body::from(token_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(archived_room_response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn campaign_seat_role_overrides_global_game_role() {
+        let state = test_state().await;
+        let admin_cookie = session_cookie_for(&state, "gm@example.com", "google-gm").await;
+        let global_gm_cookie =
+            session_cookie_for(&state, "other-gm@example.com", "google-other-gm").await;
+        let global_player_cookie =
+            session_cookie_for(&state, "player@example.com", "google-player").await;
+        let global_gm = state
+            .user_store
+            .find_user_by_email("other-gm@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        let global_player = state
+            .user_store
+            .find_user_by_email("player@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        let app = build_router(state);
+        let payload = serde_json::json!({
+            "display_name": "Role Test",
+            "room_slug": "role-test",
+            "gamemaster_user_ids": [global_player.id],
+            "player_user_ids": [global_gm.id]
+        });
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/campaigns/manage")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", admin_cookie)
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        for (cookie, expected_role) in [
+            (global_gm_cookie, crate::users::GameRole::Player),
+            (global_player_cookie, crate::users::GameRole::Gamemaster),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/v1/token")
+                        .method("POST")
+                        .header("content-type", "application/json")
+                        .header("cookie", cookie)
+                        .body(Body::from(
+                            serde_json::json!({ "room": "role-test", "name": "Seat" }).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let token: TokenResponse = serde_json::from_slice(&body).unwrap();
+            assert_eq!(token.game_role, expected_role);
+        }
+    }
+
+    #[tokio::test]
+    async fn players_cannot_manage_campaigns_and_invalid_members_are_rejected() {
+        let state = test_state().await;
+        let player_cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
+        let admin_cookie = session_cookie_for(&state, "gm@example.com", "google-gm").await;
+        let app = build_router(state);
+        let payload = serde_json::json!({
+            "display_name": "Nope",
+            "room_slug": "nope",
+            "gamemaster_user_ids": [999999]
+        });
+
+        let player_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/campaigns/manage")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", player_cookie)
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(player_response.status(), StatusCode::FORBIDDEN);
+
+        let invalid_member_response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/campaigns/manage")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", admin_cookie)
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(invalid_member_response.status(), StatusCode::BAD_REQUEST);
     }
 }
