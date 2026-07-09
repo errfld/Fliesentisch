@@ -60,7 +60,9 @@ test("admin creates a campaign preset that an assigned player can select", async
     await form.getByLabel(`Seat for ${adminEmail}`).selectOption("gm");
     await form.getByLabel(`Seat for ${playerEmail}`).selectOption("player");
     await form.getByRole("button", { name: "Create campaign" }).click();
-    await expect(adminPage.getByTestId(/campaign-\d+/).getByText("The Ashen Ledger")).toBeVisible();
+    await expect(
+      adminPage.getByTestId(/campaign-\d+/).filter({ hasText: roomSlug }).getByText("The Ashen Ledger")
+    ).toBeVisible();
   } finally {
     await adminContext.close();
   }
@@ -72,6 +74,9 @@ test("admin creates a campaign preset that an assigned player can select", async
     await expect(playerPage.getByLabel("Campaign table")).toContainText("The Ashen Ledger");
     await playerPage.getByLabel("Campaign table").selectOption(roomSlug);
     await playerPage.getByRole("button", { name: "Enter table" }).click();
+    await expect(playerPage.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+    await playerPage.getByTestId("lobby-ready-toggle").click();
+    await playerPage.getByTestId("lobby-enter-room").click();
     await expect(playerPage.getByRole("heading", { name: `Room: ${roomSlug}` })).toBeVisible();
   } finally {
     await playerContext.close();
@@ -119,6 +124,9 @@ test("gamemaster invite link provisions a player and revoked links stay closed",
     await guestPage.goto(devLoginUrl(guestEmail, firstPath, "Invite Guest"));
     await expect(guestPage.getByTestId("invite-success")).toContainText(campaignName);
     await guestPage.getByRole("link", { name: `Enter ${campaignName}` }).click();
+    await expect(guestPage.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+    await guestPage.getByTestId("lobby-ready-toggle").click();
+    await guestPage.getByTestId("lobby-enter-room").click();
     await expect(guestPage.getByRole("heading", { name: `Room: ${roomSlug}` })).toBeVisible();
 
     await inviteForm.getByRole("button", { name: "Create slip" }).click();

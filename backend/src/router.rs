@@ -340,6 +340,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lobby_token_uses_a_separate_livekit_room() {
+        let state = test_state().await;
+        let cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
+        let app = build_router(state);
+        let payload = serde_json::json!({
+            "room": "dnd-table-1",
+            "name": "Alice",
+            "purpose": "LOBBY"
+        });
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/token")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .header("cookie", cookie)
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let parsed: TokenResponse = serde_json::from_slice(&body).unwrap();
+        let decoded = decode::<LiveKitClaims>(
+            &parsed.token,
+            &DecodingKey::from_secret("devsecret".as_bytes()),
+            &Validation::new(Algorithm::HS256),
+        )
+        .unwrap();
+        assert_eq!(decoded.claims.video.room, "__vt_lobby__dnd-table-1");
+    }
+
+    #[tokio::test]
     async fn token_endpoint_rejects_disallowed_room() {
         let state = test_state().await;
         let cookie = session_cookie_for(&state, "player@example.com", "google-player").await;

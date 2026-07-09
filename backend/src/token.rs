@@ -17,17 +17,33 @@ use crate::{
 };
 
 type HmacSha256 = Hmac<Sha256>;
+const LOBBY_ROOM_PREFIX: &str = "__vt_lobby__";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TokenRequest {
     room: String,
     name: String,
+    #[serde(default)]
+    purpose: TokenPurpose,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum TokenPurpose {
+    #[default]
+    Session,
+    Lobby,
 }
 
 impl TokenRequest {
     fn validate(&self) -> Result<(), ApiError> {
         if self.room.trim().is_empty() {
             return Err(ApiError::BadRequest("`room` must not be empty".to_string()));
+        }
+        if self.room.trim().starts_with(LOBBY_ROOM_PREFIX) {
+            return Err(ApiError::BadRequest(
+                "`room` uses a reserved internal namespace".to_string(),
+            ));
         }
 
         let nickname = self.name.trim();
@@ -130,6 +146,11 @@ pub(crate) async fn mint_token(
         (req.room.clone(), user.game_role)
     };
 
+    let granted_room = match req.purpose {
+        TokenPurpose::Session => room,
+        TokenPurpose::Lobby => format!("{LOBBY_ROOM_PREFIX}{room}"),
+    };
+
     let google_subject = user.google_subject.clone().ok_or_else(|| {
         ApiError::Forbidden("authenticated user is missing Google identity".to_string())
     })?;
@@ -169,7 +190,7 @@ pub(crate) async fn mint_token(
         attributes,
         video: LiveKitVideoGrant {
             room_join: true,
-            room,
+            room: granted_room,
             can_publish: true,
             can_subscribe: true,
         },
@@ -229,6 +250,16 @@ mod tests {
             TokenRequest {
                 room: " ".to_string(),
                 name: "Alice".to_string(),
+                purpose: TokenPurpose::Session,
+            }
+            .validate(),
+            Err(ApiError::BadRequest(_))
+        ));
+        assert!(matches!(
+            TokenRequest {
+                room: "__vt_lobby__table".to_string(),
+                name: "Alice".to_string(),
+                purpose: TokenPurpose::Session,
             }
             .validate(),
             Err(ApiError::BadRequest(_))
@@ -237,6 +268,7 @@ mod tests {
             TokenRequest {
                 room: "table".to_string(),
                 name: " ".to_string(),
+                purpose: TokenPurpose::Session,
             }
             .validate(),
             Err(ApiError::BadRequest(_))

@@ -44,6 +44,13 @@ export type HandoutSpotlightStatePayload = {
   updatedAt: number;
 };
 
+export type LobbyParticipantReadiness = {
+  identity: string;
+  displayName: string;
+  ready: boolean;
+  updatedAt: number;
+};
+
 export type ProtocolEventType =
   | "STATE_REQUEST"
   | "STATE_SNAPSHOT"
@@ -54,6 +61,8 @@ export type ProtocolEventType =
   | "HANDOUT_STATE_REQUEST"
   | "HANDOUT_STATE_SNAPSHOT"
   | "HANDOUT_SPOTLIGHT_UPDATE"
+  | "LOBBY_STATE_REQUEST"
+  | "LOBBY_READY_UPDATE"
   | "SPLIT_STATE_REQUEST"
   | "SPLIT_STATE_SNAPSHOT"
   | "SPLIT_START"
@@ -118,6 +127,8 @@ export type ProtocolPayloadByType = {
   HANDOUT_STATE_REQUEST: Record<string, never>;
   HANDOUT_STATE_SNAPSHOT: HandoutSpotlightStatePayload;
   HANDOUT_SPOTLIGHT_UPDATE: HandoutSpotlightStatePayload;
+  LOBBY_STATE_REQUEST: Record<string, never>;
+  LOBBY_READY_UPDATE: LobbyParticipantReadiness;
   SPLIT_STATE_REQUEST: Record<string, never>;
   SPLIT_STATE_SNAPSHOT: SplitStateSnapshotPayload;
   SPLIT_START: SplitStateSnapshotPayload;
@@ -209,6 +220,8 @@ const protocolPayloadValidators: {
   HANDOUT_STATE_REQUEST: isEmptyRecord,
   HANDOUT_STATE_SNAPSHOT: isHandoutSpotlightStatePayload,
   HANDOUT_SPOTLIGHT_UPDATE: isHandoutSpotlightStatePayload,
+  LOBBY_STATE_REQUEST: isEmptyRecord,
+  LOBBY_READY_UPDATE: isLobbyParticipantReadiness,
   SPLIT_STATE_REQUEST: isEmptyRecord,
   SPLIT_STATE_SNAPSHOT: isSplitStateSnapshotPayload,
   SPLIT_START: isSplitStateSnapshotPayload,
@@ -287,6 +300,16 @@ function isWebImageUrl(value: unknown): value is string {
   } catch {
     return false;
   }
+}
+
+function isLobbyParticipantReadiness(payload: unknown): payload is LobbyParticipantReadiness {
+  return (
+    isRecord(payload) &&
+    typeof payload.identity === "string" &&
+    typeof payload.displayName === "string" &&
+    typeof payload.ready === "boolean" &&
+    isFiniteNumber(payload.updatedAt)
+  );
 }
 
 function isSplitStateSnapshotPayload(payload: unknown): payload is SplitStateSnapshotPayload {

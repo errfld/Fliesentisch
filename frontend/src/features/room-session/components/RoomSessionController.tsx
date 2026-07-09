@@ -14,14 +14,16 @@ import { SplitControlPanel } from "@/features/room-session/components/SplitContr
 import { SplitStatusPanel } from "@/features/room-session/components/SplitStatusPanel";
 import { WhisperPanel } from "@/features/room-session/components/WhisperPanel";
 import { useRoomSessionViewModel } from "@/features/room-session/hooks/useRoomSessionViewModel";
+import type { RoomConnectionState } from "@/features/room-session/hooks/useRoomConnection";
 
 type RoomSessionControllerProps = {
   roomName: string;
   displayName: string;
+  connection: RoomConnectionState;
 };
 
-export function RoomSessionController({ roomName, displayName }: RoomSessionControllerProps) {
-  const viewModel = useRoomSessionViewModel({ roomName, displayName });
+export function RoomSessionController({ roomName, displayName, connection }: RoomSessionControllerProps) {
+  const viewModel = useRoomSessionViewModel({ roomName, displayName, connection });
 
   if (viewModel.status.isConnecting) {
     return <RoomSessionState title="Entering the table" message="Connecting to room..." />;

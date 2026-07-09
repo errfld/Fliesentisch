@@ -14,16 +14,22 @@ import {
 } from "@/features/room-session/lib/session-helpers";
 
 const MIRROR_SELF_VIEW_STORAGE_KEY = "virtual-table-mirror-self-view";
+const AUDIO_DEVICE_STORAGE_KEY = "virtual-table-audio-device";
+const VIDEO_DEVICE_STORAGE_KEY = "virtual-table-video-device";
 
 type UseRoomMediaInput = {
   room: Room | null;
 };
 
 export function useRoomMedia({ room }: UseRoomMediaInput) {
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(Boolean(room));
   const [error, setError] = useState<string | null>(null);
   const [isPttActive, setIsPttActive] = useState(false);
-  const [micEnabled, setMicEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [micReady, setMicReady] = useState(false);
+  const [isCameraInitializing, setIsCameraInitializing] = useState(false);
+  const [isMicToggling, setIsMicToggling] = useState(false);
+  const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -39,6 +45,15 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   const mainMutedBeforePttRef = useRef(false);
   const cameraTrackRef = useRef<LocalVideoTrack | null>(null);
   const cameraPubRef = useRef<LocalTrackPublication | null>(null);
+  const pendingMediaOperationsRef = useRef(new Set<Promise<unknown>>());
+  const isReleasingRef = useRef(false);
+
+  const trackMediaOperation = useCallback(<T,>(operation: Promise<T>) => {
+    pendingMediaOperationsRef.current.add(operation);
+    const removeOperation = () => pendingMediaOperationsRef.current.delete(operation);
+    void operation.then(removeOperation, removeOperation);
+    return operation;
+  }, []);
 
   const cleanupLocalTracks = useCallback(async (targetRoom: Room | null) => {
     if (targetRoom && cameraPubRef.current && cameraTrackRef.current) {
@@ -65,8 +80,12 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     mainMutedBeforePttRef.current = false;
 
     setCameraEnabled(false);
+    setIsCameraInitializing(false);
+    setIsMicToggling(false);
+    setIsSwitchingDevice(false);
     setIsPttActive(false);
-    setMicEnabled(true);
+    setMicEnabled(false);
+    setMicReady(false);
   }, []);
 
   useEffect(() => {
@@ -84,11 +103,13 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
         setAudioDevices(audios);
         setVideoDevices(videos);
+        const storedAudio = typeof window === "undefined" ? null : window.localStorage.getItem(AUDIO_DEVICE_STORAGE_KEY);
+        const storedVideo = typeof window === "undefined" ? null : window.localStorage.getItem(VIDEO_DEVICE_STORAGE_KEY);
         if (audios[0]) {
-          setSelectedAudioDevice((current) => current || audios[0].deviceId);
+          setSelectedAudioDevice((current) => current || (storedAudio && audios.some((device) => device.deviceId === storedAudio) ? storedAudio : audios[0].deviceId));
         }
         if (videos[0]) {
-          setSelectedVideoDevice((current) => current || videos[0].deviceId);
+          setSelectedVideoDevice((current) => current || (storedVideo && videos.some((device) => device.deviceId === storedVideo) ? storedVideo : videos[0].deviceId));
         }
       } catch (deviceError) {
         setError(formatConnectionError(deviceError, "Failed to query media devices"));
@@ -119,6 +140,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
       return;
     }
 
+    isReleasingRef.current = false;
     let cancelled = false;
     let mainTrack: LocalAudioTrack | null = null;
     let publication: LocalTrackPublication | null = null;
@@ -132,9 +154,16 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
       try {
         setIsInitializing(true);
+        setMicReady(false);
+        setMicEnabled(false);
         setError(null);
 
-        mainTrack = await createLocalAudioTrack();
+        const persistedAudioDevice =
+          typeof window === "undefined" ? null : window.localStorage.getItem(AUDIO_DEVICE_STORAGE_KEY);
+        const initialAudioDevice = persistedAudioDevice || undefined;
+        mainTrack = await createLocalAudioTrack(
+          initialAudioDevice ? { deviceId: { exact: initialAudioDevice } } : undefined
+        );
         publication = await room.localParticipant.publishTrack(mainTrack, { name: "main" });
 
         if (cancelled) {
@@ -145,6 +174,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
         mainTrackRef.current = mainTrack;
         mainPubRef.current = publication;
+        setMicReady(true);
         setMicEnabled(!mainTrack.isMuted);
         setIsInitializing(false);
       } catch (mediaError) {
@@ -154,18 +184,20 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         mainTrack?.stop();
         mainTrackRef.current = null;
         mainPubRef.current = null;
+        setMicReady(false);
+        setMicEnabled(false);
         setError(formatConnectionError(mediaError, "Failed to initialize microphone"));
         setIsInitializing(false);
       }
     };
 
-    void initializeMainTrack();
+    void trackMediaOperation(initializeMainTrack());
 
     return () => {
       cancelled = true;
       void cleanupLocalTracks(room);
     };
-  }, [cleanupLocalTracks, room]);
+  }, [cleanupLocalTracks, room, trackMediaOperation]);
 
   const clearWhisperTrack = useCallback(async () => {
     if (room && whisperPubRef.current && whisperTrackRef.current) {
@@ -246,87 +278,125 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
   const toggleMic = useCallback(async () => {
     const track = mainTrackRef.current;
-    if (!track) {
+    if (!track || isMicToggling || isReleasingRef.current) {
       return;
     }
 
-    if (track.isMuted) {
-      await track.unmute();
-      setMicEnabled(true);
-    } else {
-      await track.mute();
-      setMicEnabled(false);
-    }
-  }, []);
+    setIsMicToggling(true);
+    await trackMediaOperation(
+      (async () => {
+        try {
+          if (track.isMuted) {
+            await track.unmute();
+            setMicEnabled(true);
+          } else {
+            await track.mute();
+            setMicEnabled(false);
+          }
+        } finally {
+          setIsMicToggling(false);
+        }
+      })()
+    );
+  }, [isMicToggling, trackMediaOperation]);
 
   const toggleCamera = useCallback(async () => {
-    if (!room) {
+    if (!room || isCameraInitializing || isReleasingRef.current) {
       return;
     }
 
-    if (cameraTrackRef.current && cameraPubRef.current) {
-      await room.localParticipant.unpublishTrack(cameraTrackRef.current);
-      cameraTrackRef.current.stop();
-      cameraTrackRef.current = null;
-      cameraPubRef.current = null;
-      setCameraEnabled(false);
-      return;
-    }
+    setIsCameraInitializing(true);
+    await trackMediaOperation(
+      (async () => {
+        if (cameraTrackRef.current && cameraPubRef.current) {
+          try {
+            await room.localParticipant.unpublishTrack(cameraTrackRef.current);
+            cameraTrackRef.current.stop();
+            cameraTrackRef.current = null;
+            cameraPubRef.current = null;
+            setCameraEnabled(false);
+          } finally {
+            setIsCameraInitializing(false);
+          }
+          return;
+        }
 
-    let track: LocalVideoTrack | null = null;
+        let track: LocalVideoTrack | null = null;
 
-    try {
-      track = await createLocalVideoTrack(
-        selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
-      );
-      const publication = await room.localParticipant.publishTrack(track);
+        try {
+          track = await createLocalVideoTrack(
+            selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
+          );
+          const publication = await room.localParticipant.publishTrack(track);
 
-      cameraTrackRef.current = track;
-      cameraPubRef.current = publication;
-      setCameraEnabled(true);
-    } catch (cameraError) {
-      track?.stop();
-      cameraTrackRef.current = null;
-      cameraPubRef.current = null;
-      setCameraEnabled(false);
-      setError(formatConnectionError(cameraError, "Failed to enable camera"));
-    }
-  }, [room, selectedVideoDevice]);
+          if (isReleasingRef.current) {
+            await room.localParticipant.unpublishTrack(track).catch(() => {});
+            track.stop();
+            return;
+          }
+
+          cameraTrackRef.current = track;
+          cameraPubRef.current = publication;
+          setCameraEnabled(true);
+        } catch (cameraError) {
+          track?.stop();
+          cameraTrackRef.current = null;
+          cameraPubRef.current = null;
+          setCameraEnabled(false);
+          setError(formatConnectionError(cameraError, "Failed to enable camera"));
+        } finally {
+          setIsCameraInitializing(false);
+        }
+      })()
+    );
+  }, [isCameraInitializing, room, selectedVideoDevice, trackMediaOperation]);
 
   const onSelectAudioDevice = useCallback(
     async (deviceId: string) => {
-      if (!room) {
+      if (!room || isReleasingRef.current) {
         return;
       }
 
-      const didSwitch = await room.switchActiveDevice("audioinput", deviceId);
-      if (!didSwitch) {
-        const switchError = new Error("Failed to switch microphone");
-        setError(switchError.message);
-        throw switchError;
-      }
+      setIsSwitchingDevice(true);
+      try {
+        const didSwitch = await room.switchActiveDevice("audioinput", deviceId);
+        if (!didSwitch) {
+          const switchError = new Error("Failed to switch microphone");
+          setError(switchError.message);
+          throw switchError;
+        }
 
-      setError(null);
-      setSelectedAudioDevice(deviceId);
+        setError(null);
+        setSelectedAudioDevice(deviceId);
+        window.localStorage.setItem(AUDIO_DEVICE_STORAGE_KEY, deviceId);
+      } finally {
+        setIsSwitchingDevice(false);
+      }
     },
     [room]
   );
 
   const onSelectVideoDevice = useCallback(
     async (deviceId: string) => {
-      if (!room) {
+      if (!room || isReleasingRef.current) {
         return;
       }
 
-      const didSwitch = await room.switchActiveDevice("videoinput", deviceId);
-      if (!didSwitch) {
-        const switchError = new Error("Failed to switch camera");
-        setError(switchError.message);
-        throw switchError;
-      }
+      setIsSwitchingDevice(true);
+      try {
+        const didSwitch = await room.switchActiveDevice("videoinput", deviceId);
+        if (!didSwitch) {
+          const switchError = new Error("Failed to switch camera");
+          setError(switchError.message);
+          throw switchError;
+        }
 
-      setError(null);
-      setSelectedVideoDevice(deviceId);
+        setError(null);
+        setSelectedVideoDevice(deviceId);
+        window.localStorage.setItem(VIDEO_DEVICE_STORAGE_KEY, deviceId);
+      } finally {
+        setIsSwitchingDevice(false);
+      }
     },
     [room]
   );
@@ -339,18 +409,31 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     setMirrorSelfView(mirrored);
   }, []);
 
+  const releaseLocalTracks = useCallback(async () => {
+    isReleasingRef.current = true;
+    while (pendingMediaOperationsRef.current.size > 0) {
+      await Promise.allSettled(Array.from(pendingMediaOperationsRef.current));
+    }
+    await cleanupLocalTracks(room);
+  }, [cleanupLocalTracks, room]);
+
   return {
     audioDevices,
     cameraEnabled,
     clearWhisperTrack,
     error,
+    isCameraInitializing,
     isInitializing,
+    isMicToggling,
     isPttActive,
+    isSwitchingDevice,
     mirrorSelfView,
     micEnabled,
+    micReady,
     onMirrorSelfViewChange,
     onSelectAudioDevice,
     onSelectVideoDevice,
+    releaseLocalTracks,
     selectedAudioDevice,
     selectedVideoDevice,
     startWhisperPtt,

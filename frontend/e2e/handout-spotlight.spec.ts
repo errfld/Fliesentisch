@@ -39,6 +39,9 @@ async function openParticipant(browser: Browser, displayName: string): Promise<P
   await context.route("https://assets.example.test/**", fulfillHandoutImage);
   const page = await context.newPage();
   await page.goto(devLoginUrl(TEST_ROOM, displayName));
+  await expect(page.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+  await page.getByTestId("lobby-ready-toggle").click();
+  await page.getByTestId("lobby-enter-room").click();
   await expect(page.getByRole("heading", { name: `Room: ${TEST_ROOM}` })).toBeVisible();
   return { context, page };
 }
