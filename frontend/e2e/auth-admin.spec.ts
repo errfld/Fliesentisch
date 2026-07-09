@@ -124,6 +124,9 @@ test("gamemaster invite link provisions a player and revoked links stay closed",
     await guestPage.goto(devLoginUrl(guestEmail, firstPath, "Invite Guest"));
     await expect(guestPage.getByTestId("invite-success")).toContainText(campaignName);
     await guestPage.getByRole("link", { name: `Enter ${campaignName}` }).click();
+    await expect(guestPage.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+    await guestPage.getByTestId("lobby-ready-toggle").click();
+    await guestPage.getByTestId("lobby-enter-room").click();
     await expect(guestPage.getByRole("heading", { name: `Room: ${roomSlug}` })).toBeVisible();
 
     await inviteForm.getByRole("button", { name: "Create slip" }).click();
