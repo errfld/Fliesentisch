@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useManagedCampaigns } from "@/features/campaigns/hooks/useCampaigns";
 import type { CampaignDirectoryUser, CampaignInput, CampaignPreset } from "@/features/campaigns/types";
+import { InvitePanel } from "@/features/invites/components/InvitePanel";
 
 const EMPTY_CAMPAIGN: CampaignInput = {
   display_name: "",
@@ -130,6 +131,7 @@ function CampaignCard({
           {pending ? "Saving..." : "Save preset"}
         </button>
       </div>
+      <InvitePanel campaignArchived={campaign.is_archived} campaignId={campaign.id} />
     </article>
   );
 }

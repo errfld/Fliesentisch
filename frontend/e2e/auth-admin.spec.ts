@@ -83,3 +83,56 @@ test("gamemaster can open the campaign management console without platform admin
   await expect(page.getByRole("heading", { name: "Campaign tables" })).toBeVisible();
   await expect(page.getByTestId("campaign-create-form")).toBeVisible();
 });
+
+test("gamemaster invite link provisions a player and revoked links stay closed", async ({ browser }) => {
+  const stamp = Date.now();
+  const adminEmail = `gm@${E2E_EMAIL_DOMAIN}`;
+  const guestEmail = `invite.guest.${stamp}@${E2E_EMAIL_DOMAIN}`;
+  const roomSlug = `invite-table-${stamp}`;
+  const campaignName = `Invite Table ${stamp}`;
+  const adminContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  const revokedContext = await browser.newContext();
+  const adminPage = await adminContext.newPage();
+  const guestPage = await guestContext.newPage();
+  const revokedPage = await revokedContext.newPage();
+
+  try {
+    await adminPage.goto(devLoginUrl(adminEmail, "/campaigns", "GM"));
+    const campaignForm = adminPage.getByTestId("campaign-create-form");
+    await campaignForm.getByLabel("Display name").fill(campaignName);
+    await campaignForm.getByLabel("Room slug").fill(roomSlug);
+    await campaignForm.getByLabel(`Seat for ${adminEmail}`).selectOption("gm");
+    await campaignForm.getByRole("button", { name: "Create campaign" }).click();
+
+    const campaignCard = adminPage.getByTestId(/campaign-\d+/).filter({ hasText: campaignName });
+    await expect(campaignCard).toBeVisible();
+    const inviteForm = campaignCard.getByTestId("invite-create-form");
+    await inviteForm.getByLabel("Max uses").fill("1");
+    await inviteForm.getByRole("button", { name: "Create slip" }).click();
+    const firstLink = await campaignCard.getByLabel("New invite link").inputValue();
+    const firstPath = new URL(firstLink).pathname;
+
+    await guestPage.goto(firstPath);
+    await expect(guestPage.getByRole("heading", { name: "A place is set for you" })).toBeVisible();
+    await expect(guestPage.getByRole("link", { name: "Continue with Google" })).toBeVisible();
+    await guestPage.goto(devLoginUrl(guestEmail, firstPath, "Invite Guest"));
+    await expect(guestPage.getByTestId("invite-success")).toContainText(campaignName);
+    await guestPage.getByRole("link", { name: `Enter ${campaignName}` }).click();
+    await expect(guestPage.getByRole("heading", { name: `Room: ${roomSlug}` })).toBeVisible();
+
+    await inviteForm.getByRole("button", { name: "Create slip" }).click();
+    const newInviteLink = campaignCard.getByLabel("New invite link");
+    await expect(newInviteLink).not.toHaveValue(firstLink);
+    const secondLink = await newInviteLink.inputValue();
+    const secondPath = new URL(secondLink).pathname;
+    const newestInvite = campaignCard.getByTestId(/^invite-\d+$/).first();
+    await newestInvite.getByRole("button", { name: "Revoke" }).click();
+    await expect(newestInvite).toContainText("revoked");
+
+    await revokedPage.goto(secondPath);
+    await expect(revokedPage.getByText("This invitation was revoked by its gamemaster.")).toBeVisible();
+  } finally {
+    await Promise.all([adminContext.close(), guestContext.close(), revokedContext.close()]);
+  }
+});
