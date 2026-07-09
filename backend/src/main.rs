@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod campaigns;
 mod config;
 mod error;
 mod router;

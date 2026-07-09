@@ -66,6 +66,8 @@ pub(crate) fn store_to_api_error(err: StoreError) -> ApiError {
         StoreError::UserNotFound(_) => ApiError::NotFound("user not found".to_string()),
         StoreError::InvalidEmail(message) => ApiError::BadRequest(message),
         StoreError::EmailAlreadyExists(message) => ApiError::Conflict(message),
+        StoreError::CampaignNotFound(_) => ApiError::NotFound(err.to_string()),
+        StoreError::CampaignSlugAlreadyExists(_) => ApiError::Conflict(err.to_string()),
         StoreError::LastAdminRemoval => ApiError::Conflict(err.to_string()),
         StoreError::UnknownUser(_) => ApiError::Forbidden(err.to_string()),
         StoreError::InactiveUser(_) => ApiError::Forbidden(err.to_string()),

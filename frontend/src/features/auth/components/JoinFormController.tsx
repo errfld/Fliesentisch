@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { AuthLanding } from "@/features/auth/components/AuthLanding";
 import { useAuthSession } from "@/features/auth/hooks/useAuthSession";
+import { useAvailableCampaigns } from "@/features/campaigns/hooks/useCampaigns";
 
 export function JoinFormController() {
   const auth = useAuthSession();
+  const availableCampaigns = useAvailableCampaigns(Boolean(auth.session.user));
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   if (auth.isLoading) {
@@ -33,11 +35,15 @@ export function JoinFormController() {
 
   return (
     <AuthLanding
+      campaigns={availableCampaigns.campaigns}
+      campaignsError={availableCampaigns.error}
+      campaignsLoading={availableCampaigns.isLoading}
       isLoggingOut={isLoggingOut}
       onLogout={() => {
         setIsLoggingOut(true);
         void auth.logout().finally(() => setIsLoggingOut(false));
       }}
+      onRetryCampaigns={() => void availableCampaigns.reload()}
       user={auth.session.user}
     />
   );
