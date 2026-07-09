@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RoomEvent, Track } from "livekit-client";
+import { Track } from "livekit-client";
 import type { Room } from "livekit-client";
+import type { RoomProtocol } from "@/features/room-session/lib/room-protocol";
 import { createUuid } from "@/lib/client-id";
-import {
-  createEnvelope,
-  parseProtocolEnvelope
-} from "@/lib/protocol";
+import { createEnvelope } from "@/lib/protocol";
 import type { AnyProtocolEnvelope, SpotlightPayload, SplitState, Whisper, WhisperClosePayload } from "@/lib/protocol";
 import { canUseWhisperMembersInSplit, filterWhispersForSplitView } from "@/features/room-session/lib/split-room-rules";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
@@ -16,6 +14,7 @@ import { useWhisperStore } from "@/store/whisperStore";
 
 type UseWhisperSessionInput = {
   room: Room | null;
+  protocol: RoomProtocol;
   identity: string;
   renderVersion: number;
   splitState: SplitState;
@@ -27,6 +26,7 @@ type UseWhisperSessionInput = {
 
 export function useWhisperSession({
   room,
+  protocol,
   identity,
   renderVersion,
   splitState,
@@ -79,24 +79,18 @@ export function useWhisperSession({
 
   const publishEnvelope = useCallback(
     async (envelope: AnyProtocolEnvelope, applyLocally = true) => {
-      if (!room) {
+      const result = await protocol.publish(envelope);
+      if (!result.ok) {
         return false;
       }
 
-      try {
-        const payload = new TextEncoder().encode(JSON.stringify(envelope));
-        await room.localParticipant.publishData(payload, { reliable: true });
-
-        if (applyLocally) {
-          applyEnvelope(envelope);
-        }
-
-        return true;
-      } catch {
-        return false;
+      if (applyLocally) {
+        applyEnvelope(envelope);
       }
+
+      return true;
     },
-    [applyEnvelope, room]
+    [applyEnvelope, protocol]
   );
 
   useEffect(() => {
@@ -104,34 +98,30 @@ export function useWhisperSession({
       return;
     }
 
-    const onData = (payload: Uint8Array) => {
-      const raw = new TextDecoder().decode(payload);
-      const envelope = parseProtocolEnvelope(raw);
-      if (!envelope) {
-        return;
-      }
-
-      if (envelope.type === "STATE_REQUEST") {
-        const snapshot = createEnvelope("STATE_SNAPSHOT", identity, {
-          whispers: Object.values(useWhisperStore.getState().whispers),
-          spotlightIdentity: useWhisperStore.getState().spotlightIdentity ?? null
-        });
-        void publishEnvelope(snapshot, false);
-        return;
-      }
-
-      applyEnvelope(envelope);
+    const onStateRequest = () => {
+      const snapshot = createEnvelope("STATE_SNAPSHOT", identity, {
+        whispers: Object.values(useWhisperStore.getState().whispers),
+        spotlightIdentity: useWhisperStore.getState().spotlightIdentity ?? null
+      });
+      void publishEnvelope(snapshot, false);
     };
 
-    room.on(RoomEvent.DataReceived, onData);
+    const unsubscribers = [
+      protocol.subscribe("STATE_REQUEST", onStateRequest),
+      protocol.subscribe("STATE_SNAPSHOT", applyEnvelope),
+      protocol.subscribe("WHISPER_CREATE", applyEnvelope),
+      protocol.subscribe("WHISPER_UPDATE", applyEnvelope),
+      protocol.subscribe("WHISPER_CLOSE", applyEnvelope),
+      protocol.subscribe("SPOTLIGHT_UPDATE", applyEnvelope)
+    ];
 
     const stateRequest = createEnvelope("STATE_REQUEST", identity, {});
     void publishEnvelope(stateRequest, false);
 
     return () => {
-      room.off(RoomEvent.DataReceived, onData);
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [applyEnvelope, identity, publishEnvelope, room]);
+  }, [applyEnvelope, identity, protocol, publishEnvelope, room]);
 
   useEffect(() => {
     if (!room) {

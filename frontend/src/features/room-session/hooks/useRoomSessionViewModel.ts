@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useRoomConnection } from "@/features/room-session/hooks/useRoomConnection";
 import { useRoomMedia } from "@/features/room-session/hooks/useRoomMedia";
 import { useRoomParticipants } from "@/features/room-session/hooks/useRoomParticipants";
+import { useRoomProtocol } from "@/features/room-session/hooks/useRoomProtocol";
 import { useSplitRoomSession } from "@/features/room-session/hooks/useSplitRoomSession";
 import { useWhisperSession } from "@/features/room-session/hooks/useWhisperSession";
 import {
@@ -37,6 +38,7 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
 
   const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
+  const protocol = useRoomProtocol(connection.room);
   const { participantDisplayNames, participantIdentities } = useRoomParticipants({
     room: connection.room,
     identity: connection.identity,
@@ -45,12 +47,14 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
   });
   const splitSession = useSplitRoomSession({
     room: connection.room,
+    protocol,
     identity: connection.identity,
     gameRole: connection.gameRole,
     participantIdentities
   });
   const whisperSession = useWhisperSession({
     room: connection.room,
+    protocol,
     identity: connection.identity,
     renderVersion: connection.renderVersion,
     splitState: splitSession.splitState,
