@@ -48,6 +48,7 @@ export type RoomTopBarActions = {
   onToggleCamera: () => Promise<void>;
   onFollowSpotlightChange: (follow: boolean) => void;
   onToggleSidebar: () => void;
+  onOpenDiagnostics: () => void;
   onLeave: () => void;
 };
 
@@ -124,4 +125,53 @@ export type DevicePanelActions = {
   onMirrorSelfViewChange: (mirrored: boolean) => void;
   onSelectAudioDevice: (deviceId: string) => Promise<void>;
   onSelectVideoDevice: (deviceId: string) => Promise<void>;
+};
+
+export type DiagnosticsHealthTone = "good" | "watch" | "poor" | "unknown";
+
+export type DiagnosticsConnectionEventKind =
+  | "connected"
+  | "signal-reconnecting"
+  | "reconnecting"
+  | "reconnected";
+
+export type DiagnosticsConnectionEvent = {
+  kind: DiagnosticsConnectionEventKind;
+  at: number;
+};
+
+export type DiagnosticsNetworkHealth = {
+  tone: DiagnosticsHealthTone;
+  label: string;
+  detail: string;
+  livekitQuality: string;
+  packetLossPercent: number | null;
+};
+
+export type DiagnosticsSubscriptionState = {
+  published: number;
+  subscribed: number;
+  muted: number;
+};
+
+export type DiagnosticsPanelViewModel = {
+  capturedAt: number;
+  roomName: string;
+  clientIdentity: string;
+  connectionState: string;
+  reconnectHistory: ReadonlyArray<DiagnosticsConnectionEvent>;
+  network: DiagnosticsNetworkHealth;
+  microphoneLevel: number;
+  microphoneEnabled: boolean;
+  inputDeviceLabel: string;
+  outputDeviceLabel: string;
+  cameraDeviceLabel: string;
+  mainAudio: DiagnosticsSubscriptionState;
+  whisperAudio: DiagnosticsSubscriptionState;
+  video: DiagnosticsSubscriptionState;
+  summary: string;
+};
+
+export type DiagnosticsPanelActions = {
+  onClose: () => void;
 };

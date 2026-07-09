@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRoomConnection } from "@/features/room-session/hooks/useRoomConnection";
+import { useRoomDiagnostics } from "@/features/room-session/hooks/useRoomDiagnostics";
 import { useRoomMedia } from "@/features/room-session/hooks/useRoomMedia";
 import { useRoomParticipants } from "@/features/room-session/hooks/useRoomParticipants";
 import { useRoomProtocol } from "@/features/room-session/hooks/useRoomProtocol";
@@ -35,6 +36,7 @@ function commandResult(ok: boolean): CommandResult {
 
 export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessionViewModelInput) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
@@ -44,6 +46,18 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
     identity: connection.identity,
     renderVersion: connection.renderVersion,
     displayName
+  });
+  const diagnostics = useRoomDiagnostics({
+    room: connection.room,
+    roomName,
+    clientIdentity: connection.identity,
+    open: diagnosticsOpen,
+    renderVersion: connection.renderVersion,
+    microphoneEnabled: media.micEnabled,
+    audioDevices: media.audioDevices,
+    selectedAudioDevice: media.selectedAudioDevice,
+    videoDevices: media.videoDevices,
+    selectedVideoDevice: media.selectedVideoDevice
   });
   const splitSession = useSplitRoomSession({
     room: connection.room,
@@ -118,6 +132,8 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
   );
 
   const toggleSidebar = useCallback(() => setSidebarOpen((current) => !current), []);
+  const openDiagnostics = useCallback(() => setDiagnosticsOpen(true), []);
+  const closeDiagnostics = useCallback(() => setDiagnosticsOpen(false), []);
   const {
     addRoom,
     assignParticipantToRoom,
@@ -173,6 +189,7 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
       onToggleCamera: media.toggleCamera,
       onFollowSpotlightChange: whisperSession.setFollowSpotlight,
       onToggleSidebar: toggleSidebar,
+      onOpenDiagnostics: openDiagnostics,
       onLeave: connection.disconnect
     } satisfies RoomTopBarActions
   };
@@ -268,6 +285,15 @@ export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessio
     audioLayer: {
       tracks: collections.visibleAudioTracks,
       mainVolume: whisperSession.mainVolume
+    },
+    diagnostics: {
+      open: diagnosticsOpen,
+      panel: {
+        model: diagnostics,
+        actions: {
+          onClose: closeDiagnostics
+        }
+      }
     }
   };
 }

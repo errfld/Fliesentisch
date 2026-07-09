@@ -240,3 +240,12 @@ input, select, button { font: inherit; }
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
 }
+
+.diagnostics-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 150, 62, 0.28) transparent;
+}
+
+.diagnostics-scroll::-webkit-scrollbar { width: 5px; }
+.diagnostics-scroll::-webkit-scrollbar-track { background: transparent; }
+.diagnostics-scroll::-webkit-scrollbar-thumb { background: rgba(201, 150, 62, 0.28); }
