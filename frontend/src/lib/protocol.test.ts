@@ -307,4 +307,29 @@ describe("parseProtocolEnvelope", () => {
       }
     });
   });
+
+  it("validates lobby readiness envelopes", () => {
+    const valid = {
+      type: "LOBBY_READY_UPDATE",
+      v: 1,
+      eventId: "evt-ready",
+      actor: "alice",
+      ts: 1700000000000,
+      payload: {
+        identity: "alice",
+        displayName: "Alice",
+        ready: true,
+        updatedAt: 1700000000000
+      }
+    };
+    expect(parseProtocolEnvelope(JSON.stringify(valid))).toMatchObject({
+      type: "LOBBY_READY_UPDATE",
+      payload: { identity: "alice", ready: true }
+    });
+    expect(
+      parseProtocolEnvelope(
+        JSON.stringify({ ...valid, payload: { ...valid.payload, ready: "yes" } })
+      )
+    ).toBeNull();
+  });
 });

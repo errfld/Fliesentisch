@@ -14,6 +14,8 @@ import {
 } from "@/features/room-session/lib/session-helpers";
 
 const MIRROR_SELF_VIEW_STORAGE_KEY = "virtual-table-mirror-self-view";
+const AUDIO_DEVICE_STORAGE_KEY = "virtual-table-audio-device";
+const VIDEO_DEVICE_STORAGE_KEY = "virtual-table-video-device";
 
 type UseRoomMediaInput = {
   room: Room | null;
@@ -84,11 +86,13 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
         setAudioDevices(audios);
         setVideoDevices(videos);
+        const storedAudio = typeof window === "undefined" ? null : window.localStorage.getItem(AUDIO_DEVICE_STORAGE_KEY);
+        const storedVideo = typeof window === "undefined" ? null : window.localStorage.getItem(VIDEO_DEVICE_STORAGE_KEY);
         if (audios[0]) {
-          setSelectedAudioDevice((current) => current || audios[0].deviceId);
+          setSelectedAudioDevice((current) => current || (storedAudio && audios.some((device) => device.deviceId === storedAudio) ? storedAudio : audios[0].deviceId));
         }
         if (videos[0]) {
-          setSelectedVideoDevice((current) => current || videos[0].deviceId);
+          setSelectedVideoDevice((current) => current || (storedVideo && videos.some((device) => device.deviceId === storedVideo) ? storedVideo : videos[0].deviceId));
         }
       } catch (deviceError) {
         setError(formatConnectionError(deviceError, "Failed to query media devices"));
@@ -308,6 +312,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
       setError(null);
       setSelectedAudioDevice(deviceId);
+      window.localStorage.setItem(AUDIO_DEVICE_STORAGE_KEY, deviceId);
     },
     [room]
   );
@@ -327,6 +332,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
       setError(null);
       setSelectedVideoDevice(deviceId);
+      window.localStorage.setItem(VIDEO_DEVICE_STORAGE_KEY, deviceId);
     },
     [room]
   );
@@ -351,6 +357,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     onMirrorSelfViewChange,
     onSelectAudioDevice,
     onSelectVideoDevice,
+    releaseLocalTracks: () => cleanupLocalTracks(room),
     selectedAudioDevice,
     selectedVideoDevice,
     startWhisperPtt,

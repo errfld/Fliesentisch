@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { RoomSessionController } from "@/features/room-session/components/RoomSessionController";
+import { RoomEntryController } from "@/features/session-lobby/components/RoomEntryController";
 
 type RoomSearch = {
   name?: string;
@@ -20,7 +20,7 @@ function RoomPage() {
 
   return (
     <main className="h-screen overflow-hidden">
-      <RoomSessionController roomName={room} displayName={displayName} />
+      <RoomEntryController roomName={room} displayName={displayName} />
     </main>
   );
 }

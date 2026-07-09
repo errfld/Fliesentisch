@@ -60,7 +60,9 @@ test("admin creates a campaign preset that an assigned player can select", async
     await form.getByLabel(`Seat for ${adminEmail}`).selectOption("gm");
     await form.getByLabel(`Seat for ${playerEmail}`).selectOption("player");
     await form.getByRole("button", { name: "Create campaign" }).click();
-    await expect(adminPage.getByTestId(/campaign-\d+/).getByText("The Ashen Ledger")).toBeVisible();
+    await expect(
+      adminPage.getByTestId(/campaign-\d+/).filter({ hasText: roomSlug }).getByText("The Ashen Ledger")
+    ).toBeVisible();
   } finally {
     await adminContext.close();
   }
@@ -72,6 +74,9 @@ test("admin creates a campaign preset that an assigned player can select", async
     await expect(playerPage.getByLabel("Campaign table")).toContainText("The Ashen Ledger");
     await playerPage.getByLabel("Campaign table").selectOption(roomSlug);
     await playerPage.getByRole("button", { name: "Enter table" }).click();
+    await expect(playerPage.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+    await playerPage.getByTestId("lobby-ready-toggle").click();
+    await playerPage.getByTestId("lobby-enter-room").click();
     await expect(playerPage.getByRole("heading", { name: `Room: ${roomSlug}` })).toBeVisible();
   } finally {
     await playerContext.close();

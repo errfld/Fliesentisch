@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useRoomConnection } from "@/features/room-session/hooks/useRoomConnection";
+import type { RoomConnectionState } from "@/features/room-session/hooks/useRoomConnection";
 import { useRoomDiagnostics } from "@/features/room-session/hooks/useRoomDiagnostics";
 import { useHandoutSpotlightSession } from "@/features/room-session/hooks/useHandoutSpotlightSession";
 import { useRoomMedia } from "@/features/room-session/hooks/useRoomMedia";
@@ -34,17 +34,17 @@ import type {
 type UseRoomSessionViewModelInput = {
   roomName: string;
   displayName: string;
+  connection: RoomConnectionState;
 };
 
 function commandResult(ok: boolean): CommandResult {
   return ok ? { ok: true } : { ok: false };
 }
 
-export function useRoomSessionViewModel({ roomName, displayName }: UseRoomSessionViewModelInput) {
+export function useRoomSessionViewModel({ roomName, displayName, connection }: UseRoomSessionViewModelInput) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
-  const connection = useRoomConnection({ roomName, displayName });
   const media = useRoomMedia({ room: connection.room });
   const protocol = useRoomProtocol(connection.room);
   const { participantDisplayNames, participantIdentities } = useRoomParticipants({

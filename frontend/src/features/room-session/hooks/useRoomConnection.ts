@@ -12,6 +12,7 @@ import {
 type UseRoomConnectionInput = {
   roomName: string;
   displayName: string;
+  purpose?: "session" | "lobby";
 };
 
 const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
@@ -22,7 +23,7 @@ const DISCONNECT_MESSAGES: Partial<Record<DisconnectReason, string>> = {
   [DisconnectReason.JOIN_FAILURE]: "Failed to join the room."
 };
 
-export function useRoomConnection({ roomName, displayName }: UseRoomConnectionInput) {
+export function useRoomConnection({ roomName, displayName, purpose = "session" }: UseRoomConnectionInput) {
   const [gameRole, setGameRole] = useState<GameRole | undefined>(undefined);
   const [platformRole, setPlatformRole] = useState<PlatformRole | undefined>(undefined);
   const [token, setToken] = useState("");
@@ -63,7 +64,8 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             room: roomName,
-            name: displayName
+            name: displayName,
+            purpose: purpose.toUpperCase()
           }),
           credentials: "include",
           signal: controller.signal
@@ -93,7 +95,7 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
     void fetchToken();
 
     return () => controller.abort();
-  }, [displayName, roomName]);
+  }, [displayName, purpose, roomName]);
 
   useEffect(() => {
     if (!token) {
@@ -204,7 +206,9 @@ export function useRoomConnection({ roomName, displayName }: UseRoomConnectionIn
   };
 }
 
-function normalizeGameRole(value: unknown): GameRole | undefined {
+export type RoomConnectionState = ReturnType<typeof useRoomConnection>;
+
+export function normalizeGameRole(value: unknown): GameRole | undefined {
   if (typeof value !== "string") {
     return undefined;
   }

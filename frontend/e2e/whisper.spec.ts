@@ -28,6 +28,8 @@ async function openParticipant(browser: Browser, room: string, displayName: stri
   const page = await context.newPage();
   await page.goto(devLoginUrl(room, displayName));
 
+  await enterLobby(page);
+
   await expect(page.getByRole("heading", { name: `Room: ${room}` })).toBeVisible();
   const identityNode = page.locator("p:has-text('You are') span.font-mono");
   await expect(identityNode).toBeVisible();
@@ -37,6 +39,12 @@ async function openParticipant(browser: Browser, room: string, displayName: stri
   }
 
   return { context, page, identity };
+}
+
+async function enterLobby(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { name: "Set the table before play" })).toBeVisible();
+  await page.getByTestId("lobby-ready-toggle").click();
+  await page.getByTestId("lobby-enter-room").click();
 }
 
 async function expectRosterName(page: Page, identity: string, displayName: string): Promise<void> {
@@ -149,6 +157,7 @@ test.describe("whisper multi-client flows", () => {
       await expect.poll(() => video.evaluate((node) => (node as HTMLVideoElement).style.transform)).toBe("scaleX(-1)");
 
       await alice.page.reload();
+      await enterLobby(alice.page);
       await ensureCameraOn(alice.page);
       await waitForVideoPlayback(alice.page, alice.identity);
 
