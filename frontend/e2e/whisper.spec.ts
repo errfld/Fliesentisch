@@ -247,4 +247,27 @@ test.describe("whisper multi-client flows", () => {
       await carol.context.close();
     }
   });
+
+  test("hydrates a late joiner from the whisper state snapshot", async ({ browser }) => {
+    const alice = await openParticipant(browser, TEST_ROOM, "Alice");
+    const bob = await openParticipant(browser, TEST_ROOM, "Bob");
+    let carol: ParticipantClient | undefined;
+
+    try {
+      await Promise.all([ensureCameraOn(alice.page), ensureCameraOn(bob.page)]);
+      await waitForRemoteTile(alice.page, bob.identity);
+      await clickVideoSelect(alice.page, bob.identity);
+      await alice.page.getByRole("button", { name: "New Whisper" }).click();
+      await expect(await whisperCardForMember(bob.page, alice.identity)).toBeVisible();
+
+      carol = await openParticipant(browser, TEST_ROOM, "Carol");
+      const lateJoinerCard = await whisperCardForMember(carol.page, alice.identity);
+      await expect(lateJoinerCard).toContainText(bob.identity);
+      await expect(lateJoinerCard.getByRole("button", { name: "Join" })).toBeVisible();
+    } finally {
+      await carol?.context.close();
+      await alice.context.close();
+      await bob.context.close();
+    }
+  });
 });

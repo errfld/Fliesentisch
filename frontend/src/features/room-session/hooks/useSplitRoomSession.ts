@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnyProtocolEnvelope, SplitState } from "@/lib/protocol";
-import { RoomEvent } from "livekit-client";
-import type { Participant, Room } from "livekit-client";
-import { createEnvelope, parseProtocolEnvelope } from "@/lib/protocol";
+import type { Room } from "livekit-client";
+import { createEnvelope } from "@/lib/protocol";
+import type {
+  RoomProtocol,
+  RoomProtocolMessageContext
+} from "@/features/room-session/lib/room-protocol";
 import { MAIN_SPLIT_ROOM_ID, MAIN_SPLIT_ROOM_NAME, resolveParticipantRoomId } from "@/features/room-session/lib/session-selectors";
 import { createNextSideRoom, createSplitStartState } from "@/features/room-session/lib/split-room-commands";
 import {
@@ -19,12 +22,13 @@ import type { GameRole } from "@/features/room-session/types";
 
 type UseSplitRoomSessionInput = {
   room: Room | null;
+  protocol: RoomProtocol;
   identity: string;
   gameRole?: GameRole;
   participantIdentities: string[];
 };
 
-export function useSplitRoomSession({ room, identity, gameRole, participantIdentities }: UseSplitRoomSessionInput) {
+export function useSplitRoomSession({ room, protocol, identity, gameRole, participantIdentities }: UseSplitRoomSessionInput) {
   const isActive = useSplitRoomStore((state) => state.isActive);
   const rooms = useSplitRoomStore((state) => state.rooms);
   const roomOrder = useSplitRoomStore((state) => state.roomOrder);
@@ -43,24 +47,18 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
 
   const publishSplitEnvelope = useCallback(
     async (envelope: AnyProtocolEnvelope, applyLocally = true) => {
-      if (!room) {
+      const result = await protocol.publish(envelope);
+      if (!result.ok) {
         return false;
       }
 
-      try {
-        const payload = new TextEncoder().encode(JSON.stringify(envelope));
-        await room.localParticipant.publishData(payload, { reliable: true });
-
-        if (applyLocally) {
-          applyEnvelope(envelope);
-        }
-
-        return true;
-      } catch {
-        return false;
+      if (applyLocally) {
+        applyEnvelope(envelope);
       }
+
+      return true;
     },
-    [applyEnvelope, room]
+    [applyEnvelope, protocol]
   );
 
   const publishManagedEnvelope = useCallback(
@@ -92,39 +90,41 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
       return;
     }
 
-    const onData = (payload: Uint8Array, participant?: Participant) => {
-      const raw = new TextDecoder().decode(payload);
-      const envelope = parseProtocolEnvelope(raw);
-      if (!envelope) {
-        return;
-      }
-
-      const senderIdentity = participant?.identity ?? envelope.actor;
+    const onStateRequest = (
+      envelope: Extract<AnyProtocolEnvelope, { type: "SPLIT_STATE_REQUEST" }>,
+      { senderIdentity }: RoomProtocolMessageContext
+    ) => {
       if (envelope.actor !== senderIdentity) {
         return;
       }
 
-      if (envelope.type === "SPLIT_STATE_REQUEST") {
-        const currentStore = useSplitRoomStore.getState();
-        const splitState = selectSplitState(currentStore);
+      const currentStore = useSplitRoomStore.getState();
+      const currentSplitState = selectSplitState(currentStore);
 
-        if (!splitState.isActive) {
-          return;
-        }
+      if (!currentSplitState.isActive) {
+        return;
+      }
 
-        const mayReplyToStateRequest = canManageSplitAuthority({
-          splitState,
-          identity,
-          gameRole
-        });
-        if (!mayReplyToStateRequest) {
-          return;
-        }
+      const mayReplyToStateRequest = canManageSplitAuthority({
+        splitState: currentSplitState,
+        identity,
+        gameRole
+      });
+      if (!mayReplyToStateRequest) {
+        return;
+      }
 
-        const snapshot = createEnvelope("SPLIT_STATE_SNAPSHOT", identity, {
-          splitState
-        });
-        void publishSplitEnvelope(snapshot, false);
+      const snapshot = createEnvelope("SPLIT_STATE_SNAPSHOT", identity, {
+        splitState: currentSplitState
+      });
+      void publishSplitEnvelope(snapshot, false);
+    };
+
+    const onSplitEnvelope = (
+      envelope: AnyProtocolEnvelope,
+      { participant, senderIdentity }: RoomProtocolMessageContext
+    ) => {
+      if (envelope.actor !== senderIdentity) {
         return;
       }
 
@@ -148,15 +148,25 @@ export function useSplitRoomSession({ room, identity, gameRole, participantIdent
       applyEnvelope(envelope);
     };
 
-    room.on(RoomEvent.DataReceived, onData);
+    const unsubscribers = [
+      protocol.subscribe("SPLIT_STATE_REQUEST", onStateRequest),
+      protocol.subscribe("SPLIT_STATE_SNAPSHOT", onSplitEnvelope),
+      protocol.subscribe("SPLIT_START", onSplitEnvelope),
+      protocol.subscribe("SPLIT_END", onSplitEnvelope),
+      protocol.subscribe("SPLIT_ROOM_UPSERT", onSplitEnvelope),
+      protocol.subscribe("SPLIT_ROOM_REMOVE", onSplitEnvelope),
+      protocol.subscribe("SPLIT_ASSIGNMENT_SET", onSplitEnvelope),
+      protocol.subscribe("SPLIT_GM_FOCUS_UPDATE", onSplitEnvelope),
+      protocol.subscribe("SPLIT_GM_BROADCAST_UPDATE", onSplitEnvelope)
+    ];
 
     const stateRequest = createEnvelope("SPLIT_STATE_REQUEST", identity, {});
     void publishSplitEnvelope(stateRequest, false);
 
     return () => {
-      room.off(RoomEvent.DataReceived, onData);
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [applyEnvelope, gameRole, identity, publishSplitEnvelope, room, reset]);
+  }, [applyEnvelope, gameRole, identity, protocol, publishSplitEnvelope, room, reset]);
 
   const splitState = useMemo<SplitState>(
     () => ({

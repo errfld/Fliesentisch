@@ -13,6 +13,20 @@ All messages are JSON objects:
 }
 ```
 
+## Transport lifecycle
+
+The room session owns one shared DataChannel protocol boundary for all v1 event types. It:
+
+- encodes outgoing envelopes and publishes them reliably;
+- decodes and validates incoming envelopes before routing them;
+- installs one `RoomEvent.DataReceived` listener per connected room;
+- fans valid envelopes out by their discriminated `type` to feature handlers; and
+- reports publish outcomes as `ok`, `room-unavailable`, or `publish-failed`.
+
+Whisper and split-room handlers retain their domain responsibilities. Whisper handlers own whisper snapshots and reducer updates. Split-room handlers verify the trusted LiveKit sender identity and gamemaster authority before applying state.
+
+When a participant joins, the whisper and split features each publish their typed state request. Existing eligible participants answer with feature-specific snapshots, so a late joiner hydrates through the same shared listener and routing boundary.
+
 ## Whisper payload
 
 ```json
