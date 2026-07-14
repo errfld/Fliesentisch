@@ -104,8 +104,10 @@ export async function publishRoomProtocolEnvelope<T extends ProtocolEventType>(
   }
 }
 
-export function encodeRoomProtocolEnvelope(envelope: AnyProtocolEnvelope): Uint8Array {
-  return textEncoder.encode(JSON.stringify(envelope));
+export function encodeRoomProtocolEnvelope(
+  envelope: AnyProtocolEnvelope
+): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(textEncoder.encode(JSON.stringify(envelope)));
 }
 
 export function decodeRoomProtocolEnvelope(payload: Uint8Array): AnyProtocolEnvelope | null {
