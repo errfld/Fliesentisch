@@ -18,7 +18,7 @@
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
-    "@livekit/components-react": "^2.9.21",
+    "@livekit/components-react": "^2.9.23",
     "@tailwindcss/vite": "^4.3.2",
     "@tanstack/react-router": "1.170.17",
     "@tanstack/react-start": "1.168.27",
