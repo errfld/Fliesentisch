@@ -121,12 +121,11 @@ mod tests {
     use crate::{
         admin::AdminUsersResponse,
         auth::{random_token, signed_value, SESSION_COOKIE_NAME},
+        campaign_store::{CampaignInput, CampaignPreset, CampaignStore},
         config::{parse_optional_set, AppConfig},
         invites::{CreateInviteInput, InviteStore},
         token::{derive_room_identity, LiveKitClaims, TokenResponse},
-        users::{
-            build_bootstrap_users, CampaignInput, CampaignPreset, GameRole, PlatformRole, UserStore,
-        },
+        users::{build_bootstrap_users, GameRole, PlatformRole, UserStore},
     };
     use axum::{body::Body, http::Request, http::StatusCode};
     use chrono::{Duration, Utc};
@@ -137,6 +136,9 @@ mod tests {
 
     async fn test_state() -> Arc<AppState> {
         let user_store = UserStore::connect("sqlite::memory:").await.unwrap();
+        let campaign_store = CampaignStore::initialize(user_store.sqlite_pool())
+            .await
+            .unwrap();
         let invite_store = InviteStore::initialize(user_store.sqlite_pool())
             .await
             .unwrap();
@@ -178,6 +180,7 @@ mod tests {
                 secure_cookies: false,
                 enable_dev_login: true,
             },
+            campaign_store,
             invite_store,
             user_store,
         })
@@ -736,7 +739,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let campaign = state
-            .user_store
+            .campaign_store
             .create_campaign(
                 admin.id,
                 CampaignInput {
@@ -800,7 +803,7 @@ mod tests {
             .unwrap()
             .unwrap();
         let campaign = state
-            .user_store
+            .campaign_store
             .create_campaign(
                 gm.id,
                 CampaignInput {
@@ -860,7 +863,7 @@ mod tests {
         assert_eq!(guest.game_role, GameRole::Player);
         assert_eq!(
             state
-                .user_store
+                .campaign_store
                 .campaign_role_for_user(campaign.id, guest.id)
                 .await
                 .unwrap(),
