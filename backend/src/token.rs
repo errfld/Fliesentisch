@@ -100,7 +100,7 @@ pub(crate) async fn mint_token(
     let user = require_authenticated(&state, &jar).await?;
 
     let campaign = state
-        .user_store
+        .campaign_store
         .find_campaign_by_room_slug(&req.room)
         .await
         .map_err(|err| {
@@ -109,7 +109,7 @@ pub(crate) async fn mint_token(
         })?;
     let (room, effective_game_role) = if let Some(campaign) = campaign {
         let membership_role = state
-            .user_store
+            .campaign_store
             .campaign_role_for_user(campaign.id, user.id)
             .await
             .map_err(|err| {

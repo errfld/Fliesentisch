@@ -528,7 +528,7 @@ pub(crate) async fn create_campaign_invite(
 ) -> Result<impl IntoResponse, ApiError> {
     let manager = require_invite_manager(&state, &jar, campaign_id).await?;
     let campaign = state
-        .user_store
+        .campaign_store
         .find_campaign_by_id(campaign_id)
         .await
         .map_err(|err| {
@@ -613,7 +613,7 @@ async fn require_invite_manager(
         ));
     }
     let allowed = state
-        .user_store
+        .campaign_store
         .user_can_manage_campaign(
             campaign_id,
             manager.id,
@@ -786,10 +786,14 @@ pub(crate) enum InviteStoreError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::users::{build_bootstrap_users, CampaignInput, UserPatch, UserStore};
+    use crate::campaign_store::{CampaignInput, CampaignStore};
+    use crate::users::{build_bootstrap_users, UserPatch, UserStore};
 
-    async fn stores() -> (UserStore, InviteStore, i64, i64) {
+    async fn stores() -> (UserStore, CampaignStore, InviteStore, i64, i64) {
         let users = UserStore::connect("sqlite::memory:").await.unwrap();
+        let campaigns = CampaignStore::initialize(users.sqlite_pool())
+            .await
+            .unwrap();
         let invite_store = InviteStore::initialize(users.sqlite_pool()).await.unwrap();
         let bootstrap = build_bootstrap_users(
             &[],
@@ -808,7 +812,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let campaign = users
+        let campaign = campaigns
             .create_campaign(
                 gm.id,
                 CampaignInput {
@@ -822,12 +826,12 @@ mod tests {
             )
             .await
             .unwrap();
-        (users, invite_store, campaign.id, player.id)
+        (users, campaigns, invite_store, campaign.id, player.id)
     }
 
     #[tokio::test]
     async fn redemption_creates_restricted_player_and_is_idempotent() {
-        let (users, invites, campaign_id, _) = stores().await;
+        let (users, campaigns, invites, campaign_id, _) = stores().await;
         invites
             .create_invite(
                 campaign_id,
@@ -869,7 +873,7 @@ mod tests {
         assert_eq!(user.platform_role, PlatformRole::User);
         assert_eq!(user.game_role, GameRole::Player);
         assert_eq!(
-            users
+            campaigns
                 .campaign_role_for_user(campaign_id, user.id)
                 .await
                 .unwrap(),
@@ -884,7 +888,7 @@ mod tests {
 
     #[tokio::test]
     async fn max_use_expiry_and_revocation_are_enforced() {
-        let (_users, invites, campaign_id, _) = stores().await;
+        let (_users, _campaigns, invites, campaign_id, _) = stores().await;
         let input = CreateInviteInput {
             expires_at: None,
             max_uses: Some(1),
@@ -942,7 +946,7 @@ mod tests {
 
     #[tokio::test]
     async fn redemption_never_promotes_existing_player() {
-        let (users, invites, campaign_id, player_id) = stores().await;
+        let (users, campaigns, invites, campaign_id, player_id) = stores().await;
         invites
             .create_invite(
                 campaign_id,
@@ -968,7 +972,7 @@ mod tests {
         assert_eq!(user.platform_role, PlatformRole::User);
         assert_eq!(user.game_role, GameRole::Player);
         assert_eq!(
-            users
+            campaigns
                 .campaign_role_for_user(campaign_id, player_id)
                 .await
                 .unwrap(),
@@ -978,7 +982,7 @@ mod tests {
 
     #[tokio::test]
     async fn invite_cannot_reactivate_a_privileged_user() {
-        let (users, invites, campaign_id, _) = stores().await;
+        let (users, _campaigns, invites, campaign_id, _) = stores().await;
         let gm = users
             .find_user_by_email("gm@example.com")
             .await
@@ -1030,6 +1034,9 @@ mod tests {
         std::fs::File::create(&path).unwrap();
         let database_url = format!("sqlite://{}", path.display());
         let users = UserStore::connect(&database_url).await.unwrap();
+        let campaigns = CampaignStore::initialize(users.sqlite_pool())
+            .await
+            .unwrap();
         let invites = InviteStore::initialize(users.sqlite_pool()).await.unwrap();
         let bootstrap = build_bootstrap_users(&[], &["gm@example.com".to_string()], &[]).unwrap();
         users.seed_bootstrap_users(&bootstrap).await.unwrap();
@@ -1038,7 +1045,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        let campaign = users
+        let campaign = campaigns
             .create_campaign(
                 gm.id,
                 CampaignInput {
@@ -1067,6 +1074,9 @@ mod tests {
         users.sqlite_pool().close().await;
 
         let reopened_users = UserStore::connect(&database_url).await.unwrap();
+        CampaignStore::initialize(reopened_users.sqlite_pool())
+            .await
+            .unwrap();
         let reopened_pool = reopened_users.sqlite_pool();
         let reopened_invites = InviteStore::initialize(reopened_pool.clone())
             .await
