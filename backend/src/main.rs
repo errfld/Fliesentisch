@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod campaign_store;
 mod campaigns;
 mod config;
 mod error;
@@ -15,6 +16,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration as StdDuration};
 use reqwest::Client;
 use tracing::{error, info};
 
+use campaign_store::CampaignStore;
 use config::AppConfig;
 use invites::InviteStore;
 use router::build_router;
@@ -54,6 +56,14 @@ async fn main() {
         std::process::exit(1);
     }
 
+    let campaign_store = match CampaignStore::initialize(user_store.sqlite_pool()).await {
+        Ok(store) => store,
+        Err(err) => {
+            error!("campaign store init error: {err}");
+            std::process::exit(1);
+        }
+    };
+
     let invite_store = match InviteStore::initialize(user_store.sqlite_pool()).await {
         Ok(store) => store,
         Err(err) => {
@@ -85,6 +95,7 @@ async fn main() {
     let state = Arc::new(AppState {
         http_client,
         config,
+        campaign_store,
         invite_store,
         user_store,
     });

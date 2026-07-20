@@ -6,7 +6,7 @@ use axum::{
 use thiserror::Error;
 use tracing::error;
 
-use crate::users::StoreError;
+use crate::{campaign_store::CampaignStoreError, users::StoreError};
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
@@ -69,14 +69,23 @@ pub(crate) fn store_to_api_error(err: StoreError) -> ApiError {
         StoreError::UserNotFound(_) => ApiError::NotFound("user not found".to_string()),
         StoreError::InvalidEmail(message) => ApiError::BadRequest(message),
         StoreError::EmailAlreadyExists(message) => ApiError::Conflict(message),
-        StoreError::CampaignNotFound(_) => ApiError::NotFound(err.to_string()),
-        StoreError::CampaignSlugAlreadyExists(_) => ApiError::Conflict(err.to_string()),
         StoreError::LastAdminRemoval => ApiError::Conflict(err.to_string()),
         StoreError::UnknownUser(_) => ApiError::Forbidden(err.to_string()),
         StoreError::InactiveUser(_) => ApiError::Forbidden(err.to_string()),
         StoreError::GoogleSubjectMismatch(_, _) => ApiError::Forbidden(err.to_string()),
         other => {
             error!("store error: {other}");
+            ApiError::Internal
+        }
+    }
+}
+
+pub(crate) fn campaign_store_to_api_error(err: CampaignStoreError) -> ApiError {
+    match err {
+        CampaignStoreError::CampaignNotFound(_) => ApiError::NotFound(err.to_string()),
+        CampaignStoreError::CampaignSlugAlreadyExists(_) => ApiError::Conflict(err.to_string()),
+        other => {
+            error!("campaign store error: {other}");
             ApiError::Internal
         }
     }

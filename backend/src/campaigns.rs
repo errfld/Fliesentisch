@@ -12,9 +12,10 @@ use tracing::error;
 
 use crate::{
     auth::require_authenticated,
-    error::{store_to_api_error, ApiError},
+    campaign_store::{CampaignInput, CampaignPreset},
+    error::{campaign_store_to_api_error, store_to_api_error, ApiError},
     state::AppState,
-    users::{AuthUser, CampaignInput, CampaignPreset, GameRole, PlatformRole},
+    users::{AuthUser, GameRole, PlatformRole},
 };
 
 const MAX_CAMPAIGN_NAME_LENGTH: usize = 80;
@@ -125,10 +126,10 @@ pub(crate) async fn list_available_campaigns(
 ) -> Result<impl IntoResponse, ApiError> {
     let user = require_authenticated(&state, &jar).await?;
     let campaigns = state
-        .user_store
+        .campaign_store
         .list_campaigns_for_user(user.id, user.platform_role == PlatformRole::Admin)
         .await
-        .map_err(store_to_api_error)?;
+        .map_err(campaign_store_to_api_error)?;
     Ok(Json(CampaignsResponse { campaigns }))
 }
 
@@ -138,10 +139,10 @@ pub(crate) async fn list_managed_campaigns(
 ) -> Result<impl IntoResponse, ApiError> {
     let manager = require_campaign_manager(&state, &jar).await?;
     let campaigns = state
-        .user_store
+        .campaign_store
         .list_managed_campaigns(manager.id, manager.platform_role == PlatformRole::Admin)
         .await
-        .map_err(store_to_api_error)?;
+        .map_err(campaign_store_to_api_error)?;
     Ok(Json(CampaignsResponse { campaigns }))
 }
 
@@ -177,10 +178,10 @@ pub(crate) async fn create_campaign(
     request.validate()?;
     validate_campaign_members(&state, &request).await?;
     let campaign = state
-        .user_store
+        .campaign_store
         .create_campaign(manager.id, request.into_input(&manager))
         .await
-        .map_err(store_to_api_error)?;
+        .map_err(campaign_store_to_api_error)?;
     Ok((StatusCode::CREATED, Json(campaign)))
 }
 
@@ -195,10 +196,10 @@ pub(crate) async fn update_campaign(
     request.validate()?;
     validate_campaign_members(&state, &request).await?;
     let campaign = state
-        .user_store
+        .campaign_store
         .update_campaign(campaign_id, request.into_input(&manager))
         .await
-        .map_err(store_to_api_error)?;
+        .map_err(campaign_store_to_api_error)?;
     Ok(Json(campaign))
 }
 
@@ -233,10 +234,10 @@ pub(crate) async fn archive_campaign(
     let manager = require_campaign_manager(&state, &jar).await?;
     require_campaign_access(&state, &manager, campaign_id).await?;
     state
-        .user_store
+        .campaign_store
         .archive_campaign(campaign_id)
         .await
-        .map_err(store_to_api_error)?;
+        .map_err(campaign_store_to_api_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -256,7 +257,7 @@ async fn require_campaign_access(
     campaign_id: i64,
 ) -> Result<(), ApiError> {
     let allowed = state
-        .user_store
+        .campaign_store
         .user_can_manage_campaign(
             campaign_id,
             manager.id,
