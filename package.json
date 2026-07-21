@@ -18,6 +18,7 @@
       "flatted": "3.4.2",
       "picomatch@^4.0.0": "4.0.4",
       "fast-uri": "3.1.2",
+      "js-yaml": "4.3.0",
       "h3-v2": "npm:h3@2.0.1-rc.20",
       "@tanstack/react-start": "1.168.27",
       "@tanstack/router-plugin": "1.168.19",
@@ -59,6 +60,13 @@
         ],
         "reference": "https://github.com/fastify/fast-uri/security/advisories/GHSA-v39h-62p7-jpjc",
         "note": "Pinned to 3.1.2 to keep the URI parsing fixes for the 2026 fast-uri advisories in place. Remove once every transitive consumer accepts >=3.1.2 without an override and upstream no longer needs the pin."
+      },
+      "js-yaml": {
+        "mitigates": [
+          "GHSA-52cp-r559-cp3m"
+        ],
+        "reference": "https://github.com/advisories/GHSA-52cp-r559-cp3m",
+        "note": "Pinned to 4.3.0 until the TanStack Start dependency chain resolves a patched js-yaml without an override."
       },
       "h3-v2": {
         "mitigates": [
