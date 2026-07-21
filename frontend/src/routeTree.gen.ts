@@ -9,16 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as CampaignsRouteImport } from './routes/campaigns'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RoomRoomRouteImport } from './routes/room.$room'
-import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as CampaignsRouteImport } from './routes/campaigns'
 import { Route as AuthUnauthorizedRouteImport } from './routes/auth.unauthorized'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as RoomRoomRouteImport } from './routes/room.$room'
 
-const CampaignsRoute = CampaignsRouteImport.update({
-  id: '/campaigns',
-  path: '/campaigns',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -26,14 +26,14 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CampaignsRoute = CampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RoomRoomRoute = RoomRoomRouteImport.update({
-  id: '/room/$room',
-  path: '/room/$room',
+const AuthUnauthorizedRoute = AuthUnauthorizedRouteImport.update({
+  id: '/auth/unauthorized',
+  path: '/auth/unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteTokenRoute = InviteTokenRouteImport.update({
@@ -41,9 +41,9 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
   path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthUnauthorizedRoute = AuthUnauthorizedRouteImport.update({
-  id: '/auth/unauthorized',
-  path: '/auth/unauthorized',
+const RoomRoomRoute = RoomRoomRouteImport.update({
+  id: '/room/$room',
+  path: '/room/$room',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -110,11 +110,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/campaigns': {
-      id: '/campaigns'
-      path: '/campaigns'
-      fullPath: '/campaigns'
-      preLoaderRoute: typeof CampaignsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -124,18 +124,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/campaigns': {
+      id: '/campaigns'
+      path: '/campaigns'
+      fullPath: '/campaigns'
+      preLoaderRoute: typeof CampaignsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/room/$room': {
-      id: '/room/$room'
-      path: '/room/$room'
-      fullPath: '/room/$room'
-      preLoaderRoute: typeof RoomRoomRouteImport
+    '/auth/unauthorized': {
+      id: '/auth/unauthorized'
+      path: '/auth/unauthorized'
+      fullPath: '/auth/unauthorized'
+      preLoaderRoute: typeof AuthUnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite/$token': {
@@ -145,11 +145,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/unauthorized': {
-      id: '/auth/unauthorized'
-      path: '/auth/unauthorized'
-      fullPath: '/auth/unauthorized'
-      preLoaderRoute: typeof AuthUnauthorizedRouteImport
+    '/room/$room': {
+      id: '/room/$room'
+      path: '/room/$room'
+      fullPath: '/room/$room'
+      preLoaderRoute: typeof RoomRoomRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
