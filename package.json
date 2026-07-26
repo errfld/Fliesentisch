@@ -17,6 +17,7 @@
       "undici": "7.28.0",
       "flatted": "3.4.2",
       "picomatch@^4.0.0": "4.0.4",
+      "brace-expansion": "5.0.8",
       "fast-uri": "3.1.4",
       "js-yaml": "4.3.0",
       "h3-v2": "npm:h3@2.0.1-rc.20",
@@ -64,6 +65,13 @@
         ],
         "reference": "https://github.com/fastify/fast-uri/releases/tag/v3.1.4",
         "note": "Pinned to 3.1.4 to keep the URI parsing fixes for the 2026 fast-uri advisories in place. Remove once every transitive consumer accepts >=3.1.4 without an override and upstream no longer needs the pin."
+      },
+      "brace-expansion": {
+        "mitigates": [
+          "GHSA-mh99-v99m-4gvg"
+        ],
+        "reference": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+        "note": "Pins all transitive consumers to 5.0.8 because the advisory range includes every older release. Remove once minimatch and other consumers resolve a patched brace-expansion without an override."
       },
       "js-yaml": {
         "mitigates": [
