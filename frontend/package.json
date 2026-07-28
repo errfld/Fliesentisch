@@ -25,7 +25,7 @@
     "@tanstack/router-plugin": "1.168.23",
     "livekit-client": "^2.20.1",
     "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "react-dom": "19.2.8",
     "serve": "^14.2.5",
     "tailwindcss": "^4.3.3",
     "zustand": "^5.0.14"
