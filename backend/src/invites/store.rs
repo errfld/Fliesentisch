@@ -1,9 +1,7 @@
 use sqlx::{Row, SqlitePool};
 
-use super::model::invite_from_row;
-use super::{
-    hash_token, CampaignInvite, CreateInviteInput, InviteStatus, InviteStoreError, PublicInvite,
-};
+use super::model::{hash_token, invite_from_row};
+use super::{CampaignInvite, CreateInviteInput, InviteStatus, InviteStoreError, PublicInvite};
 
 #[derive(Debug, Clone)]
 pub(crate) struct InviteStore {
