@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, Row, SqlitePool};
 use std::{collections::BTreeMap, path::Path};
@@ -58,19 +57,6 @@ impl UserStore {
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            "#,
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS auth_sessions (
-                session_id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                expires_at INTEGER NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             "#,
         )
@@ -251,64 +237,6 @@ impl UserStore {
         .await?;
 
         maybe_row.map(auth_user_from_row).transpose()
-    }
-
-    pub async fn create_session(
-        &self,
-        session_id: &str,
-        user_id: i64,
-        expires_at: DateTime<Utc>,
-    ) -> Result<(), StoreError> {
-        sqlx::query(
-            r#"
-            INSERT INTO auth_sessions (session_id, user_id, expires_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET
-                user_id = excluded.user_id,
-                expires_at = excluded.expires_at
-            "#,
-        )
-        .bind(session_id)
-        .bind(user_id)
-        .bind(expires_at.timestamp())
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn get_session_user(&self, session_id: &str) -> Result<Option<AuthUser>, StoreError> {
-        let maybe_row = sqlx::query(
-            r#"
-            SELECT
-                users.id,
-                users.email,
-                users.normalized_email,
-                users.display_name,
-                users.google_subject,
-                users.platform_role,
-                users.game_role,
-                users.is_active
-            FROM auth_sessions
-            INNER JOIN users ON users.id = auth_sessions.user_id
-            WHERE auth_sessions.session_id = ?
-              AND auth_sessions.expires_at > unixepoch()
-            "#,
-        )
-        .bind(session_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        maybe_row.map(auth_user_from_row).transpose()
-    }
-
-    pub async fn delete_session(&self, session_id: &str) -> Result<(), StoreError> {
-        sqlx::query("DELETE FROM auth_sessions WHERE session_id = ?")
-            .bind(session_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
     }
 
     pub async fn update_user_display_name(
@@ -745,7 +673,7 @@ pub fn build_bootstrap_users(
         .collect())
 }
 
-fn auth_user_from_row(row: sqlx::sqlite::SqliteRow) -> Result<AuthUser, StoreError> {
+pub(crate) fn auth_user_from_row(row: sqlx::sqlite::SqliteRow) -> Result<AuthUser, StoreError> {
     Ok(AuthUser {
         id: row.get("id"),
         email: row.get("email"),
@@ -868,33 +796,6 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, StoreError::GoogleSubjectMismatch(_, _)));
-    }
-
-    #[tokio::test]
-    async fn sessions_return_active_user_until_expired_or_deleted() {
-        let store = UserStore::connect("sqlite::memory:").await.unwrap();
-        let users = build_bootstrap_users(&[], &[], &["player@example.com".to_string()]).unwrap();
-        store.seed_bootstrap_users(&users).await.unwrap();
-
-        let user = store
-            .authorize_google_user("player@example.com", "google-sub-1", Some("Alice"))
-            .await
-            .unwrap();
-
-        store
-            .create_session(
-                "session-1",
-                user.id,
-                Utc::now() + chrono::Duration::hours(1),
-            )
-            .await
-            .unwrap();
-
-        let session_user = store.get_session_user("session-1").await.unwrap();
-        assert_eq!(session_user.as_ref().map(|value| value.id), Some(user.id));
-
-        store.delete_session("session-1").await.unwrap();
-        assert!(store.get_session_user("session-1").await.unwrap().is_none());
     }
 
     #[test]

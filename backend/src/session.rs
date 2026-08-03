@@ -57,7 +57,7 @@ pub(crate) async fn logout(
 ) -> Result<impl IntoResponse, ApiError> {
     if let Some(session_id) = read_signed_cookie(&state.config, &jar, SESSION_COOKIE_NAME) {
         state
-            .user_store
+            .session_store
             .delete_session(&session_id)
             .await
             .map_err(|err| {
