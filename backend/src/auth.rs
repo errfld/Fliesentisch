@@ -42,7 +42,7 @@ pub(crate) async fn get_authenticated_user(
     };
 
     let user = state
-        .user_store
+        .session_store
         .get_session_user(&session_id)
         .await
         .map_err(|err| {
@@ -462,7 +462,7 @@ async fn create_session_cookie(
     let expires_at =
         chrono::Utc::now() + chrono::Duration::seconds(state.config.session_ttl_seconds as i64);
     state
-        .user_store
+        .session_store
         .create_session(&session_id, user.id, expires_at)
         .await
         .map_err(|err| {

@@ -7,6 +7,7 @@ mod error;
 mod invites;
 mod router;
 mod session;
+mod session_store;
 mod state;
 mod token;
 mod users;
@@ -20,6 +21,7 @@ use campaign_store::CampaignStore;
 use config::AppConfig;
 use invites::InviteStore;
 use router::build_router;
+use session_store::SessionStore;
 use state::AppState;
 use users::UserStore;
 
@@ -55,6 +57,14 @@ async fn main() {
         error!("user bootstrap error: {err}");
         std::process::exit(1);
     }
+
+    let session_store = match SessionStore::initialize(user_store.sqlite_pool()).await {
+        Ok(store) => store,
+        Err(err) => {
+            error!("session store init error: {err}");
+            std::process::exit(1);
+        }
+    };
 
     let campaign_store = match CampaignStore::initialize(user_store.sqlite_pool()).await {
         Ok(store) => store,
@@ -97,6 +107,7 @@ async fn main() {
         config,
         campaign_store,
         invite_store,
+        session_store,
         user_store,
     });
     let app = build_router(state);
