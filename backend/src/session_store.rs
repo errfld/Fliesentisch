@@ -54,6 +54,8 @@ impl SessionStore {
         &self,
         session_id: &str,
     ) -> Result<Option<AuthUser>, StoreError> {
+        self.delete_expired_sessions().await?;
+
         let maybe_row = sqlx::query(
             r#"
             SELECT
@@ -76,6 +78,13 @@ impl SessionStore {
         .await?;
 
         maybe_row.map(auth_user_from_row).transpose()
+    }
+
+    async fn delete_expired_sessions(&self) -> Result<(), StoreError> {
+        sqlx::query("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()")
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub(crate) async fn delete_session(&self, session_id: &str) -> Result<(), StoreError> {
@@ -134,6 +143,13 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+        let expired_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM auth_sessions WHERE session_id = ?")
+                .bind("expired-session")
+                .fetch_one(&sessions.pool)
+                .await
+                .unwrap();
+        assert_eq!(expired_count, 0);
 
         sessions.delete_session("active-session").await.unwrap();
         assert!(sessions
