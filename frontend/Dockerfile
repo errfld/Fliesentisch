@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS builder
+FROM node:24.15.0-bookworm-slim AS builder
 WORKDIR /app
 RUN corepack enable
 
@@ -15,7 +15,7 @@ COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN pnpm build
 
-FROM node:20-bookworm-slim AS runner
+FROM node:24.15.0-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production HOME=/tmp
 RUN groupadd --system --gid 1001 nodejs \
