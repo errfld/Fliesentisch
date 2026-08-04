@@ -124,6 +124,7 @@ mod tests {
         campaign_store::{CampaignInput, CampaignPreset, CampaignStore},
         config::{parse_optional_set, AppConfig},
         invites::{CreateInviteInput, InviteStore},
+        session_store::SessionStore,
         token::{derive_room_identity, LiveKitClaims, TokenResponse},
         users::{build_bootstrap_users, GameRole, PlatformRole, UserStore},
     };
@@ -140,6 +141,9 @@ mod tests {
             .await
             .unwrap();
         let invite_store = InviteStore::initialize(user_store.sqlite_pool())
+            .await
+            .unwrap();
+        let session_store = SessionStore::initialize(user_store.sqlite_pool())
             .await
             .unwrap();
         let bootstrap_users = build_bootstrap_users(
@@ -182,6 +186,7 @@ mod tests {
             },
             campaign_store,
             invite_store,
+            session_store,
             user_store,
         })
     }
@@ -194,7 +199,7 @@ mod tests {
             .unwrap();
         let session_id = random_token(16).unwrap();
         state
-            .user_store
+            .session_store
             .create_session(&session_id, user.id, Utc::now() + Duration::hours(1))
             .await
             .unwrap();
@@ -238,6 +243,49 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn session_endpoint_reports_inactive_user_as_unauthenticated() {
+        let state = test_state().await;
+        let cookie = session_cookie_for(&state, "player@example.com", "google-player").await;
+        let user = state
+            .user_store
+            .find_user_by_email("player@example.com")
+            .await
+            .unwrap()
+            .unwrap();
+        state
+            .user_store
+            .update_user(
+                user.id,
+                crate::users::UserPatch {
+                    is_active: Some(false),
+                    ..crate::users::UserPatch::default()
+                },
+            )
+            .await
+            .unwrap();
+        let app = build_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/auth/session")
+                    .header("cookie", cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed["authenticated"], false);
+        assert!(parsed["user"].is_null());
     }
 
     #[tokio::test]
