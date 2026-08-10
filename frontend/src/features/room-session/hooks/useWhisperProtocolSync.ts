@@ -8,6 +8,25 @@ import type {
 import { createEnvelope } from "@/lib/protocol";
 import type { AnyProtocolEnvelope, StateSnapshotPayload } from "@/lib/protocol";
 
+type PublishEnvelope = (
+  envelope: AnyProtocolEnvelope,
+  applyLocally?: boolean
+) => Promise<RoomProtocolPublishResult>;
+
+export async function publishEnvelopeBatch(
+  envelopes: AnyProtocolEnvelope[],
+  publishEnvelope: PublishEnvelope
+): Promise<RoomProtocolPublishResult> {
+  for (const envelope of envelopes) {
+    const result = await publishEnvelope(envelope);
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
 type UseWhisperProtocolSyncInput = Readonly<{
   enabled: boolean;
   protocol: RoomProtocol;

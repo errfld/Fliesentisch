@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Track } from "livekit-client";
 import type { Room } from "livekit-client";
-import { useWhisperProtocolSync } from "@/features/room-session/hooks/useWhisperProtocolSync";
-import type { RoomProtocol } from "@/features/room-session/lib/room-protocol";
+import {
+  publishEnvelopeBatch,
+  useWhisperProtocolSync
+} from "@/features/room-session/hooks/useWhisperProtocolSync";
+import type { RoomProtocol, RoomProtocolPublishResult } from "@/features/room-session/lib/room-protocol";
 import { createUuid } from "@/lib/client-id";
 import { createEnvelope } from "@/lib/protocol";
 import type { SpotlightPayload, SplitState, Whisper, WhisperClosePayload } from "@/lib/protocol";
@@ -180,19 +183,22 @@ export function useWhisperSession({
   );
 
   const publishReassignmentMutations = useCallback(
-    async (targetWhisperId: string, movedMembers: string[], updatedAt: number) => {
+    async (
+      targetWhisperId: string,
+      movedMembers: string[],
+      updatedAt: number
+    ): Promise<RoomProtocolPublishResult> => {
       if (!identity) {
-        return;
+        return { ok: true };
       }
 
       const mutations = collectReassignmentMutations(whispers, targetWhisperId, movedMembers, updatedAt);
-      for (const mutation of mutations) {
-        if (mutation.type === "close") {
-          await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, mutation.payload));
-          continue;
-        }
-        await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, mutation.whisper));
-      }
+      const envelopes = mutations.map((mutation) =>
+        mutation.type === "close"
+          ? createEnvelope("WHISPER_CLOSE", identity, mutation.payload)
+          : createEnvelope("WHISPER_UPDATE", identity, mutation.whisper)
+      );
+      return publishEnvelopeBatch(envelopes, publishEnvelope);
     },
     [identity, publishEnvelope, whispers]
   );
@@ -224,7 +230,11 @@ export function useWhisperSession({
       return;
     }
 
-    await publishReassignmentMutations(id, members, now);
+    const reassignmentResult = await publishReassignmentMutations(id, members, now);
+    if (!reassignmentResult.ok) {
+      setWhisperNotice("Failed to create whisper while disconnected.");
+      return;
+    }
 
     const whisper: Whisper = {
       id,
@@ -262,7 +272,11 @@ export function useWhisperSession({
         return;
       }
 
-      await publishReassignmentMutations(whisper.id, [identity], now);
+      const reassignmentResult = await publishReassignmentMutations(whisper.id, [identity], now);
+      if (!reassignmentResult.ok) {
+        setWhisperNotice("Failed to join whisper while disconnected.");
+        return;
+      }
 
       const publishResult = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!publishResult.ok) {
@@ -299,7 +313,11 @@ export function useWhisperSession({
         return;
       }
 
-      await publishReassignmentMutations(whisper.id, participantsToAdd, now);
+      const reassignmentResult = await publishReassignmentMutations(whisper.id, participantsToAdd, now);
+      if (!reassignmentResult.ok) {
+        setWhisperNotice("Failed to update whisper while disconnected.");
+        return;
+      }
 
       const publishResult = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
       if (!publishResult.ok) {

@@ -1,7 +1,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useWhisperProtocolSync } from "@/features/room-session/hooks/useWhisperProtocolSync";
+import {
+  publishEnvelopeBatch,
+  useWhisperProtocolSync
+} from "@/features/room-session/hooks/useWhisperProtocolSync";
 import type {
   RoomProtocol,
   RoomProtocolMessageHandler,
@@ -80,6 +83,32 @@ afterEach(() => {
 });
 
 describe("useWhisperProtocolSync", () => {
+  it("stops a reassignment batch before the final mutation after a publish failure", async () => {
+    const failure = { ok: false, reason: "publish-failed" } as const;
+    const { protocol, publish } = createFakeProtocol();
+    publish.mockResolvedValueOnce(failure).mockResolvedValueOnce({ ok: true });
+    const reassignment = createEnvelope("WHISPER_CLOSE", "alice", {
+      id: "old-whisper",
+      updatedAt: 9
+    });
+    const finalMutation = createEnvelope("WHISPER_CREATE", "alice", {
+      id: "new-whisper",
+      members: ["alice", "bob"],
+      createdBy: "alice",
+      createdAt: 10,
+      updatedAt: 10
+    });
+
+    const result = await publishEnvelopeBatch(
+      [reassignment, finalMutation],
+      protocol.publish.bind(protocol)
+    );
+
+    expect(result).toEqual(failure);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith(reassignment);
+  });
+
   it("owns whisper subscriptions, initial request, snapshot response, mutations, and cleanup", async () => {
     const { emit, handlers, protocol, publish, subscribe } = createFakeProtocol();
     const applyEnvelope = vi.fn();
