@@ -109,6 +109,6 @@
     }
   },
   "devDependencies": {
-    "turbo": "^2.10.7"
+    "turbo": "^2.10.8"
   }
 }
