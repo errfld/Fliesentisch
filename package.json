@@ -22,7 +22,8 @@
       "picomatch@^4.0.0": "4.0.4",
       "brace-expansion": "5.0.9",
       "fast-uri": "3.1.5",
-      "js-yaml": "4.3.0",
+      "js-yaml": "4.3.1",
+      "nanoid": "3.3.17",
       "h3-v2": "npm:h3@2.0.1-rc.20",
       "@tanstack/react-start": "1.168.34",
       "@tanstack/router-plugin": "1.168.23",
@@ -81,10 +82,18 @@
       },
       "js-yaml": {
         "mitigates": [
-          "GHSA-52cp-r559-cp3m"
+          "GHSA-52cp-r559-cp3m",
+          "GHSA-5p4m-2wfm-xmqj"
         ],
-        "reference": "https://github.com/advisories/GHSA-52cp-r559-cp3m",
-        "note": "Pinned to 4.3.0 until the TanStack Start dependency chain resolves a patched js-yaml without an override."
+        "reference": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
+        "note": "Pinned to 4.3.1 until the TanStack Start dependency chain resolves a patched js-yaml without an override."
+      },
+      "nanoid": {
+        "mitigates": [
+          "GHSA-2v37-7h3g-55p8"
+        ],
+        "reference": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+        "note": "Pinned to 3.3.17 until Vite's PostCSS dependency resolves a patched nanoid without an override."
       },
       "h3-v2": {
         "mitigates": [
