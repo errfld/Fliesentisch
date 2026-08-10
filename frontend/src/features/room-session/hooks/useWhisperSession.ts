@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Track } from "livekit-client";
 import type { Room } from "livekit-client";
+import { useWhisperProtocolSync } from "@/features/room-session/hooks/useWhisperProtocolSync";
 import type { RoomProtocol } from "@/features/room-session/lib/room-protocol";
 import { createUuid } from "@/lib/client-id";
 import { createEnvelope } from "@/lib/protocol";
-import type { AnyProtocolEnvelope, SpotlightPayload, SplitState, Whisper, WhisperClosePayload } from "@/lib/protocol";
+import type { SpotlightPayload, SplitState, Whisper, WhisperClosePayload } from "@/lib/protocol";
 import { canUseWhisperMembersInSplit, filterWhispersForSplitView } from "@/features/room-session/lib/split-room-rules";
 import { useWhisperPtt } from "@/hooks/useWhisperPtt";
 import { collectReassignmentMutations } from "@/lib/whisper-membership";
@@ -77,51 +78,17 @@ export function useWhisperSession({
     }
   }, [identity, setLocalIdentity]);
 
-  const publishEnvelope = useCallback(
-    async (envelope: AnyProtocolEnvelope, applyLocally = true) => {
-      const result = await protocol.publish(envelope);
-      if (!result.ok) {
-        return false;
-      }
-
-      if (applyLocally) {
-        applyEnvelope(envelope);
-      }
-
-      return true;
-    },
-    [applyEnvelope, protocol]
-  );
-
-  useEffect(() => {
-    if (!room || !identity) {
-      return;
-    }
-
-    const onStateRequest = () => {
-      const snapshot = createEnvelope("STATE_SNAPSHOT", identity, {
-        whispers: Object.values(useWhisperStore.getState().whispers),
-        spotlightIdentity: useWhisperStore.getState().spotlightIdentity ?? null
-      });
-      void publishEnvelope(snapshot, false);
-    };
-
-    const unsubscribers = [
-      protocol.subscribe("STATE_REQUEST", onStateRequest),
-      protocol.subscribe("STATE_SNAPSHOT", applyEnvelope),
-      protocol.subscribe("WHISPER_CREATE", applyEnvelope),
-      protocol.subscribe("WHISPER_UPDATE", applyEnvelope),
-      protocol.subscribe("WHISPER_CLOSE", applyEnvelope),
-      protocol.subscribe("SPOTLIGHT_UPDATE", applyEnvelope)
-    ];
-
-    const stateRequest = createEnvelope("STATE_REQUEST", identity, {});
-    void publishEnvelope(stateRequest, false);
-
-    return () => {
-      unsubscribers.forEach((unsubscribe) => unsubscribe());
-    };
-  }, [applyEnvelope, identity, protocol, publishEnvelope, room]);
+  const getWhisperSnapshot = useCallback(() => ({
+    whispers: Object.values(useWhisperStore.getState().whispers),
+    spotlightIdentity: useWhisperStore.getState().spotlightIdentity ?? null
+  }), []);
+  const { publishEnvelope } = useWhisperProtocolSync({
+    enabled: Boolean(room),
+    protocol,
+    identity,
+    applyEnvelope,
+    getSnapshot: getWhisperSnapshot
+  });
 
   useEffect(() => {
     if (!room) {
@@ -267,8 +234,8 @@ export function useWhisperSession({
       updatedAt: now
     };
 
-    const didPublish = await publishEnvelope(createEnvelope("WHISPER_CREATE", identity, whisper));
-    if (!didPublish) {
+    const publishResult = await publishEnvelope(createEnvelope("WHISPER_CREATE", identity, whisper));
+    if (!publishResult.ok) {
       setWhisperNotice("Failed to create whisper while disconnected.");
       return;
     }
@@ -297,8 +264,8 @@ export function useWhisperSession({
 
       await publishReassignmentMutations(whisper.id, [identity], now);
 
-      const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
-      if (!didPublish) {
+      const publishResult = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      if (!publishResult.ok) {
         setWhisperNotice("Failed to join whisper while disconnected.");
         return;
       }
@@ -334,8 +301,8 @@ export function useWhisperSession({
 
       await publishReassignmentMutations(whisper.id, participantsToAdd, now);
 
-      const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
-      if (!didPublish) {
+      const publishResult = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+      if (!publishResult.ok) {
         setWhisperNotice("Failed to update whisper while disconnected.");
         return;
       }
@@ -358,8 +325,8 @@ export function useWhisperSession({
           id: whisper.id,
           updatedAt: Date.now()
         };
-        const didPublish = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
-        if (!didPublish) {
+        const publishResult = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+        if (!publishResult.ok) {
           setWhisperNotice("Failed to leave whisper while disconnected.");
           return;
         }
@@ -369,8 +336,8 @@ export function useWhisperSession({
           members: remaining,
           updatedAt: Date.now()
         };
-        const didPublish = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
-        if (!didPublish) {
+        const publishResult = await publishEnvelope(createEnvelope("WHISPER_UPDATE", identity, updated));
+        if (!publishResult.ok) {
           setWhisperNotice("Failed to leave whisper while disconnected.");
           return;
         }
@@ -410,8 +377,8 @@ export function useWhisperSession({
         id: whisper.id,
         updatedAt: Date.now()
       };
-      const didPublish = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
-      if (!didPublish) {
+      const publishResult = await publishEnvelope(createEnvelope("WHISPER_CLOSE", identity, closePayload));
+      if (!publishResult.ok) {
         setWhisperNotice("Failed to close whisper while disconnected.");
         return;
       }
