@@ -23,11 +23,11 @@
       "brace-expansion": "5.0.9",
       "fast-uri": "3.1.5",
       "js-yaml": "4.3.1",
-      "nanoid": "3.3.17",
+      "nanoid": "3.3.18",
       "h3-v2": "npm:h3@2.0.1-rc.20",
-      "@tanstack/react-start": "1.168.34",
-      "@tanstack/router-plugin": "1.168.23",
-      "@tanstack/react-router": "1.170.18"
+      "@tanstack/react-start": "1.168.44",
+      "@tanstack/router-plugin": "1.168.30",
+      "@tanstack/react-router": "1.170.27"
     },
     "reviewNotes": {
       "undici": {
@@ -93,7 +93,7 @@
           "GHSA-2v37-7h3g-55p8"
         ],
         "reference": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
-        "note": "Pinned to 3.3.17 until Vite's PostCSS dependency resolves a patched nanoid without an override."
+        "note": "Pinned to 3.3.18 until Vite's PostCSS dependency resolves a patched nanoid without an override."
       },
       "h3-v2": {
         "mitigates": [
