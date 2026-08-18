@@ -12,10 +12,7 @@ import {
   formatConnectionError,
   MEDIA_ACCESS_ERROR
 } from "@/features/room-session/lib/session-helpers";
-
-const MIRROR_SELF_VIEW_STORAGE_KEY = "virtual-table-mirror-self-view";
-const AUDIO_DEVICE_STORAGE_KEY = "virtual-table-audio-device";
-const VIDEO_DEVICE_STORAGE_KEY = "virtual-table-video-device";
+import { useMediaDevicePreferences } from "@/features/room-session/hooks/useMediaDevicePreferences";
 
 type UseRoomMediaInput = {
   room: Room | null;
@@ -29,13 +26,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   const [micReady, setMicReady] = useState(false);
   const [isCameraInitializing, setIsCameraInitializing] = useState(false);
   const [isMicToggling, setIsMicToggling] = useState(false);
-  const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioDevice, setSelectedAudioDevice] = useState("");
-  const [selectedVideoDevice, setSelectedVideoDevice] = useState("");
-  const [mirrorSelfView, setMirrorSelfView] = useState(false);
 
   const mainTrackRef = useRef<LocalAudioTrack | null>(null);
   const mainPubRef = useRef<LocalTrackPublication | null>(null);
@@ -47,6 +38,13 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   const cameraPubRef = useRef<LocalTrackPublication | null>(null);
   const pendingMediaOperationsRef = useRef(new Set<Promise<unknown>>());
   const isReleasingRef = useRef(false);
+  const isReleasing = useCallback(() => isReleasingRef.current, []);
+  const mediaPreferences = useMediaDevicePreferences({ room, isReleasing });
+  const selectedAudioDeviceRef = useRef(mediaPreferences.selectedAudioDevice);
+
+  useEffect(() => {
+    selectedAudioDeviceRef.current = mediaPreferences.selectedAudioDevice;
+  }, [mediaPreferences.selectedAudioDevice]);
 
   const trackMediaOperation = useCallback(<T,>(operation: Promise<T>) => {
     pendingMediaOperationsRef.current.add(operation);
@@ -82,61 +80,17 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
     setCameraEnabled(false);
     setIsCameraInitializing(false);
     setIsMicToggling(false);
-    setIsSwitchingDevice(false);
     setIsPttActive(false);
     setMicEnabled(false);
     setMicReady(false);
   }, []);
 
   useEffect(() => {
-    const loadDevices = async () => {
-      if (!canAccessMediaDevices()) {
-        setError(MEDIA_ACCESS_ERROR);
-        return;
-      }
-
-      try {
-        const [audios, videos] = await Promise.all([
-          Room.getLocalDevices("audioinput"),
-          Room.getLocalDevices("videoinput")
-        ]);
-
-        setAudioDevices(audios);
-        setVideoDevices(videos);
-        const storedAudio = typeof window === "undefined" ? null : window.localStorage.getItem(AUDIO_DEVICE_STORAGE_KEY);
-        const storedVideo = typeof window === "undefined" ? null : window.localStorage.getItem(VIDEO_DEVICE_STORAGE_KEY);
-        if (audios[0]) {
-          setSelectedAudioDevice((current) => current || (storedAudio && audios.some((device) => device.deviceId === storedAudio) ? storedAudio : audios[0].deviceId));
-        }
-        if (videos[0]) {
-          setSelectedVideoDevice((current) => current || (storedVideo && videos.some((device) => device.deviceId === storedVideo) ? storedVideo : videos[0].deviceId));
-        }
-      } catch (deviceError) {
-        setError(formatConnectionError(deviceError, "Failed to query media devices"));
-      }
-    };
-
-    void loadDevices();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const storedMirrorSelfView = window.localStorage.getItem(MIRROR_SELF_VIEW_STORAGE_KEY);
-    const parsedMirrorSelfView = storedMirrorSelfView === "true";
-
-    if (storedMirrorSelfView === null) {
-      window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, "false");
-    }
-
-    setMirrorSelfView(parsedMirrorSelfView);
-  }, []);
-
-  useEffect(() => {
     if (!room) {
       setIsInitializing(false);
+      return;
+    }
+    if (!mediaPreferences.isDeviceDiscoveryComplete) {
       return;
     }
 
@@ -158,9 +112,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         setMicEnabled(false);
         setError(null);
 
-        const persistedAudioDevice =
-          typeof window === "undefined" ? null : window.localStorage.getItem(AUDIO_DEVICE_STORAGE_KEY);
-        const initialAudioDevice = persistedAudioDevice || undefined;
+        const initialAudioDevice = selectedAudioDeviceRef.current || undefined;
         mainTrack = await createLocalAudioTrack(
           initialAudioDevice ? { deviceId: { exact: initialAudioDevice } } : undefined
         );
@@ -197,7 +149,12 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
       cancelled = true;
       void cleanupLocalTracks(room);
     };
-  }, [cleanupLocalTracks, room, trackMediaOperation]);
+  }, [
+    cleanupLocalTracks,
+    mediaPreferences.isDeviceDiscoveryComplete,
+    room,
+    trackMediaOperation
+  ]);
 
   const clearWhisperTrack = useCallback(async () => {
     if (room && whisperPubRef.current && whisperTrackRef.current) {
@@ -325,7 +282,9 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
 
         try {
           track = await createLocalVideoTrack(
-            selectedVideoDevice ? { deviceId: { exact: selectedVideoDevice } } : undefined
+            mediaPreferences.selectedVideoDevice
+              ? { deviceId: { exact: mediaPreferences.selectedVideoDevice } }
+              : undefined
           );
           const publication = await room.localParticipant.publishTrack(track);
 
@@ -349,65 +308,7 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
         }
       })()
     );
-  }, [isCameraInitializing, room, selectedVideoDevice, trackMediaOperation]);
-
-  const onSelectAudioDevice = useCallback(
-    async (deviceId: string) => {
-      if (!room || isReleasingRef.current) {
-        return;
-      }
-
-      setIsSwitchingDevice(true);
-      try {
-        const didSwitch = await room.switchActiveDevice("audioinput", deviceId);
-        if (!didSwitch) {
-          const switchError = new Error("Failed to switch microphone");
-          setError(switchError.message);
-          throw switchError;
-        }
-
-        setError(null);
-        setSelectedAudioDevice(deviceId);
-        window.localStorage.setItem(AUDIO_DEVICE_STORAGE_KEY, deviceId);
-      } finally {
-        setIsSwitchingDevice(false);
-      }
-    },
-    [room]
-  );
-
-  const onSelectVideoDevice = useCallback(
-    async (deviceId: string) => {
-      if (!room || isReleasingRef.current) {
-        return;
-      }
-
-      setIsSwitchingDevice(true);
-      try {
-        const didSwitch = await room.switchActiveDevice("videoinput", deviceId);
-        if (!didSwitch) {
-          const switchError = new Error("Failed to switch camera");
-          setError(switchError.message);
-          throw switchError;
-        }
-
-        setError(null);
-        setSelectedVideoDevice(deviceId);
-        window.localStorage.setItem(VIDEO_DEVICE_STORAGE_KEY, deviceId);
-      } finally {
-        setIsSwitchingDevice(false);
-      }
-    },
-    [room]
-  );
-
-  const onMirrorSelfViewChange = useCallback((mirrored: boolean) => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(MIRROR_SELF_VIEW_STORAGE_KEY, mirrored ? "true" : "false");
-    }
-
-    setMirrorSelfView(mirrored);
-  }, []);
+  }, [isCameraInitializing, mediaPreferences.selectedVideoDevice, room, trackMediaOperation]);
 
   const releaseLocalTracks = useCallback(async () => {
     isReleasingRef.current = true;
@@ -418,28 +319,28 @@ export function useRoomMedia({ room }: UseRoomMediaInput) {
   }, [cleanupLocalTracks, room]);
 
   return {
-    audioDevices,
+    audioDevices: mediaPreferences.audioDevices,
     cameraEnabled,
     clearWhisperTrack,
-    error,
+    error: mediaPreferences.error ?? error,
     isCameraInitializing,
     isInitializing,
     isMicToggling,
     isPttActive,
-    isSwitchingDevice,
-    mirrorSelfView,
+    isSwitchingDevice: mediaPreferences.isSwitchingDevice,
+    mirrorSelfView: mediaPreferences.mirrorSelfView,
     micEnabled,
     micReady,
-    onMirrorSelfViewChange,
-    onSelectAudioDevice,
-    onSelectVideoDevice,
+    onMirrorSelfViewChange: mediaPreferences.onMirrorSelfViewChange,
+    onSelectAudioDevice: mediaPreferences.onSelectAudioDevice,
+    onSelectVideoDevice: mediaPreferences.onSelectVideoDevice,
     releaseLocalTracks,
-    selectedAudioDevice,
-    selectedVideoDevice,
+    selectedAudioDevice: mediaPreferences.selectedAudioDevice,
+    selectedVideoDevice: mediaPreferences.selectedVideoDevice,
     startWhisperPtt,
     stopWhisperPtt,
     toggleCamera,
     toggleMic,
-    videoDevices
+    videoDevices: mediaPreferences.videoDevices
   };
 }
