@@ -27,11 +27,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 24.15.0
+          node-version: 26.2.0
           cache: pnpm
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install and enable corepack
+        run: npm install --global corepack@0.34.6 && corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -88,7 +88,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 24.15.0
+          node-version: 26.2.0
           cache: pnpm
 
       - name: Install Rust toolchain
@@ -99,8 +99,8 @@ jobs:
         with:
           workspaces: backend
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install and enable corepack
+        run: npm install --global corepack@0.34.6 && corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -309,11 +309,11 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 24.15.0
+          node-version: 26.2.0
           cache: pnpm
 
-      - name: Enable corepack
-        run: corepack enable
+      - name: Install and enable corepack
+        run: npm install --global corepack@0.34.6 && corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
