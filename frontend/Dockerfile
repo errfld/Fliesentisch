@@ -1,6 +1,6 @@
-FROM node:24.15.0-bookworm-slim AS builder
+FROM node:26.2.0-bookworm-slim AS builder
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global corepack@0.34.6 && corepack enable
 
 ARG VITE_LIVEKIT_URL
 ARG VITE_DEFAULT_ROOM=dnd-table-1
@@ -15,7 +15,7 @@ COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN pnpm build
 
-FROM node:24.15.0-bookworm-slim AS runner
+FROM node:26.2.0-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production HOME=/tmp
 RUN groupadd --system --gid 1001 nodejs \
