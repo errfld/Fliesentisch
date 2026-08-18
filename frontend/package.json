@@ -9,7 +9,7 @@
     "start": "serve -s dist/client -l 3000",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "clients:start": "bash ./scripts/multi-clients.sh start",
     "clients:stop": "bash ./scripts/multi-clients.sh stop",
     "clients:list": "bash ./scripts/multi-clients.sh list",
