@@ -20,7 +20,7 @@
   "dependencies": {
     "@livekit/components-react": "^2.9.24",
     "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/react-router": "1.170.29",
+    "@tanstack/react-router": "1.170.31",
     "@tanstack/react-start": "1.168.46",
     "@tanstack/router-plugin": "1.168.32",
     "livekit-client": "^2.21.0",
