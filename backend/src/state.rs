@@ -1,13 +1,11 @@
-use reqwest::Client;
-
 use crate::{
-    campaign_store::CampaignStore, config::AppConfig, invites::InviteStore,
-    session_store::SessionStore, users::UserStore,
+    campaign_store::CampaignStore, config::AppConfig, google_oauth::GoogleOAuthClient,
+    invites::InviteStore, session_store::SessionStore, users::UserStore,
 };
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
-    pub(crate) http_client: Client,
+    pub(crate) google_oauth: GoogleOAuthClient,
     pub(crate) config: AppConfig,
     pub(crate) campaign_store: CampaignStore,
     pub(crate) invite_store: InviteStore,

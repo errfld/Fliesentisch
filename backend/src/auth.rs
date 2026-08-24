@@ -24,9 +24,7 @@ use crate::{
 const OAUTH_STATE_COOKIE_NAME: &str = "vt_oauth_state";
 const OAUTH_VERIFIER_COOKIE_NAME: &str = "vt_oauth_verifier";
 const OAUTH_NEXT_COOKIE_NAME: &str = "vt_oauth_next";
-const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
+
 const UNAUTHORIZED_PATH: &str = "/auth/unauthorized";
 const DEFAULT_AUTH_REDIRECT: &str = "/";
 pub(crate) const SESSION_COOKIE_NAME: &str = "vt_session";
@@ -150,17 +148,13 @@ pub(crate) async fn start_google_login(
     let next = sanitize_next_path(params.next.as_deref());
     let pkce_challenge = pkce_challenge(&pkce_verifier);
 
-    let mut auth_url = Url::parse(GOOGLE_AUTH_URL).map_err(|_| ApiError::Internal)?;
-    auth_url
-        .query_pairs_mut()
-        .append_pair("client_id", &state.config.google_client_id)
-        .append_pair("redirect_uri", &state.config.google_redirect_uri)
-        .append_pair("response_type", "code")
-        .append_pair("scope", "openid email profile")
-        .append_pair("state", &state_token)
-        .append_pair("code_challenge", &pkce_challenge)
-        .append_pair("code_challenge_method", "S256")
-        .append_pair("prompt", "select_account");
+    let auth_url = state
+        .google_oauth
+        .authorization_url(&state_token, &pkce_challenge)
+        .map_err(|err| {
+            error!("google authorization URL error: {err}");
+            ApiError::Internal
+        })?;
 
     let jar = set_cookie(
         &state.config,
@@ -226,7 +220,7 @@ pub(crate) async fn handle_google_callback(
         return Ok((clear_jar, Redirect::to(&redirect)));
     }
 
-    let google_user = match exchange_google_code(&state, code, &pkce_verifier).await {
+    let google_user = match state.google_oauth.exchange_code(code, &pkce_verifier).await {
         Ok(user) => user,
         Err(err) => {
             error!("google oauth exchange error: {err}");
@@ -388,71 +382,6 @@ enum LoginAuthorizationError {
     Internal,
 }
 
-async fn exchange_google_code(
-    state: &AppState,
-    code: &str,
-    code_verifier: &str,
-) -> Result<GoogleUserInfo, ApiError> {
-    let token_response = state
-        .http_client
-        .post(GOOGLE_TOKEN_URL)
-        .form(&[
-            ("code", code),
-            ("client_id", state.config.google_client_id.as_str()),
-            ("client_secret", state.config.google_client_secret.as_str()),
-            ("redirect_uri", state.config.google_redirect_uri.as_str()),
-            ("grant_type", "authorization_code"),
-            ("code_verifier", code_verifier),
-        ])
-        .send()
-        .await
-        .map_err(|err| {
-            error!("Google token exchange send error: {err:?}");
-            ApiError::Internal
-        })?;
-
-    if !token_response.status().is_success() {
-        let status = token_response.status();
-        let body = token_response
-            .text()
-            .await
-            .unwrap_or_else(|err| format!("<failed to read response body: {err}>"));
-        error!("Google token exchange failed: status={status}, body={body}");
-        return Err(ApiError::Internal);
-    }
-
-    let token_body: GoogleTokenResponse = token_response.json().await.map_err(|err| {
-        error!("Google token exchange response parse error: {err:?}");
-        ApiError::Internal
-    })?;
-
-    let userinfo_response = state
-        .http_client
-        .get(GOOGLE_USERINFO_URL)
-        .bearer_auth(token_body.access_token)
-        .send()
-        .await
-        .map_err(|err| {
-            error!("Google userinfo fetch send error: {err:?}");
-            ApiError::Internal
-        })?;
-
-    if !userinfo_response.status().is_success() {
-        let status = userinfo_response.status();
-        let body = userinfo_response
-            .text()
-            .await
-            .unwrap_or_else(|err| format!("<failed to read response body: {err}>"));
-        error!("Google userinfo fetch failed: status={status}, body={body}");
-        return Err(ApiError::Internal);
-    }
-
-    userinfo_response.json().await.map_err(|err| {
-        error!("Google userinfo response parse error: {err:?}");
-        ApiError::Internal
-    })
-}
-
 async fn create_session_cookie(
     state: &AppState,
     jar: CookieJar,
@@ -558,19 +487,6 @@ struct DevLoginQuery {
     email: String,
     name: Option<String>,
     next: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GoogleTokenResponse {
-    access_token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct GoogleUserInfo {
-    sub: String,
-    email: String,
-    email_verified: bool,
-    name: Option<String>,
 }
 
 #[cfg(test)]
