@@ -9,13 +9,25 @@ const GOOGLE_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct GoogleOAuthClient {
     http: Client,
     client_id: String,
     client_secret: String,
     redirect_uri: String,
     endpoints: GoogleEndpoints,
+}
+
+impl std::fmt::Debug for GoogleOAuthClient {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GoogleOAuthClient")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[redacted]")
+            .field("redirect_uri", &self.redirect_uri)
+            .field("endpoints", &self.endpoints)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +185,7 @@ struct GoogleTokenResponse {
 pub(crate) struct GoogleProfile {
     pub(crate) sub: String,
     pub(crate) email: String,
+    #[serde(default)]
     pub(crate) email_verified: bool,
     pub(crate) name: Option<String>,
 }
@@ -236,6 +249,15 @@ mod tests {
                 .iter()
                 .any(|pair| pair.0 == expected.0 && pair.1 == expected.1));
         }
+    }
+
+    #[test]
+    fn debug_output_redacts_client_secret() {
+        let client = GoogleOAuthClient::new(Client::new(), &config());
+        let debug = format!("{client:?}");
+
+        assert!(!debug.contains("google-secret"));
+        assert!(debug.contains("[redacted]"));
     }
 
     #[tokio::test]
@@ -400,6 +422,35 @@ mod tests {
             })
         ));
         malformed_task.abort();
+    }
+
+    #[tokio::test]
+    async fn exchange_treats_missing_email_verification_as_unverified() {
+        let app = Router::new()
+            .route(
+                "/token",
+                post(|| async { Json(json!({"access_token": "provider-token"})) }),
+            )
+            .route(
+                "/userinfo",
+                get(|| async {
+                    Json(json!({
+                        "sub": "google-subject",
+                        "email": "alice@example.com"
+                    }))
+                }),
+            );
+        let (base_url, task) = spawn_server(app).await;
+        let client = GoogleOAuthClient::new(Client::new(), &config()).with_endpoints(
+            format!("{base_url}/authorize"),
+            format!("{base_url}/token"),
+            format!("{base_url}/userinfo"),
+        );
+
+        let profile = client.exchange_code("code", "verifier").await.unwrap();
+        task.abort();
+
+        assert!(!profile.email_verified);
     }
 
     async fn spawn_server(app: Router) -> (String, tokio::task::JoinHandle<()>) {
