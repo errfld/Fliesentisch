@@ -4,6 +4,7 @@ mod campaign_store;
 mod campaigns;
 mod config;
 mod error;
+mod google_oauth;
 mod invites;
 mod router;
 mod session;
@@ -19,6 +20,7 @@ use tracing::{error, info};
 
 use campaign_store::CampaignStore;
 use config::AppConfig;
+use google_oauth::GoogleOAuthClient;
 use invites::InviteStore;
 use router::build_router;
 use session_store::SessionStore;
@@ -102,8 +104,9 @@ async fn main() {
         }
     };
 
+    let google_oauth = GoogleOAuthClient::new(http_client, &config);
     let state = Arc::new(AppState {
-        http_client,
+        google_oauth,
         config,
         campaign_store,
         invite_store,
