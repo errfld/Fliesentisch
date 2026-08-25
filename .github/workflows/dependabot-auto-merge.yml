@@ -18,7 +18,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Approve and merge eligible Dependabot PR
+      - name: Merge eligible Dependabot PR
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -51,27 +51,6 @@ jobs:
           if [ "$head_sha" != "$WORKFLOW_HEAD_SHA" ]; then
             echo "Skipping stale CI run for PR #${PR_NUMBER}."
             exit 0
-          fi
-
-          reviews_json="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-          approval_for_head="$(
-            echo "$reviews_json" | jq -r --arg head_sha "$head_sha" '
-              any(
-                .[];
-                .user.login == "github-actions[bot]" and
-                .state == "APPROVED" and
-                .commit_id == $head_sha
-              )
-            '
-          )"
-
-          if [ "$approval_for_head" != "true" ]; then
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              "repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
-              -f event="APPROVE" \
-              -f body="Auto-approving Dependabot update so it can merge once required checks pass."
           fi
 
           attempts=0
