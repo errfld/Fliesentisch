@@ -123,6 +123,7 @@ mod tests {
         auth::{random_token, signed_value, SESSION_COOKIE_NAME},
         campaign_store::{CampaignInput, CampaignPreset, CampaignStore},
         config::{parse_optional_set, AppConfig},
+        google_oauth::GoogleOAuthClient,
         invites::{CreateInviteInput, InviteStore},
         session_store::SessionStore,
         token::{derive_room_identity, LiveKitClaims, TokenResponse},
@@ -163,27 +164,28 @@ mod tests {
             .await
             .unwrap();
 
+        let config = AppConfig {
+            bind_addr: "127.0.0.1:8787".to_string(),
+            database_url: "sqlite::memory:".to_string(),
+            bootstrap_users: vec![],
+            livekit_api_key: "devkey".to_string(),
+            livekit_api_secret: "devsecret".to_string(),
+            google_client_id: "google-client".to_string(),
+            google_client_secret: "google-secret".to_string(),
+            google_redirect_uri: "http://localhost:3000/api/v1/auth/google/callback".to_string(),
+            auth_base_url: Url::parse("http://localhost:3000/").unwrap(),
+            cookie_secret: "cookie-secret".to_string(),
+            allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
+            token_ttl_seconds: 3600,
+            session_ttl_seconds: 7200,
+            frontend_origins: vec!["http://localhost:3000".to_string()],
+            secure_cookies: false,
+            enable_dev_login: true,
+        };
+        let google_oauth = GoogleOAuthClient::new(Client::new(), &config);
         Arc::new(AppState {
-            http_client: Client::new(),
-            config: AppConfig {
-                bind_addr: "127.0.0.1:8787".to_string(),
-                database_url: "sqlite::memory:".to_string(),
-                bootstrap_users: vec![],
-                livekit_api_key: "devkey".to_string(),
-                livekit_api_secret: "devsecret".to_string(),
-                google_client_id: "google-client".to_string(),
-                google_client_secret: "google-secret".to_string(),
-                google_redirect_uri: "http://localhost:3000/api/v1/auth/google/callback"
-                    .to_string(),
-                auth_base_url: Url::parse("http://localhost:3000/").unwrap(),
-                cookie_secret: "cookie-secret".to_string(),
-                allowed_rooms: parse_optional_set(Some("dnd-table-1".to_string())),
-                token_ttl_seconds: 3600,
-                session_ttl_seconds: 7200,
-                frontend_origins: vec!["http://localhost:3000".to_string()],
-                secure_cookies: false,
-                enable_dev_login: true,
-            },
+            google_oauth,
+            config,
             campaign_store,
             invite_store,
             session_store,
