@@ -29,7 +29,7 @@ importers:
     dependencies:
       '@livekit/components-react':
         specifier: ^2.9.24
-        version: 2.9.24(livekit-client@2.22.0(@types/dom-mediacapture-record@1.0.22))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tslib@2.8.1)
+        version: 2.9.24(livekit-client@2.22.1(@types/dom-mediacapture-record@1.0.22))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tslib@2.8.1)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0))
@@ -43,8 +43,8 @@ importers:
         specifier: 1.168.34
         version: 1.168.34(@tanstack/react-router@1.170.31(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(rolldown@1.2.5)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0))
       livekit-client:
-        specifier: ^2.22.0
-        version: 2.22.0(@types/dom-mediacapture-record@1.0.22)
+        specifier: ^2.22.1
+        version: 2.22.1(@types/dom-mediacapture-record@1.0.22)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -1580,8 +1580,8 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  livekit-client@2.22.0:
-    resolution: {integrity: sha512-GLtYQfRh/RsvXaOX1x609bFZ17yyKmKWDqu9JmkMKn9vIFLi2GsapRv9gT8OJO/1R2dsitrkbGmloyUfxWQsaA==}
+  livekit-client@2.22.1:
+    resolution: {integrity: sha512-kCxTlGOV2XWYXZ7zK01UUKjgpVydvJ0CBgdHuv2I+s4q08tn0UTzpHfFqXPb5Aba4h6KdNU0TjQCHzv4Lww7fQ==}
     peerDependencies:
       '@types/dom-mediacapture-record': ^1
 
@@ -1610,6 +1610,10 @@ packages:
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
     hasBin: true
+
+  machina@7.0.1:
+    resolution: {integrity: sha512-0Xkgs8NeBvO2hW6bjJT8ewLWrMfh1haMPstaghpASWjXkLjRhtDiaJG1Kb7mslaOHxZYxpH7PIjpmirRVYbMMA==}
+    engines: {node: '>=22.22'}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -2492,21 +2496,21 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@livekit/components-core@0.12.15(livekit-client@2.22.0(@types/dom-mediacapture-record@1.0.22))(tslib@2.8.1)':
+  '@livekit/components-core@0.12.15(livekit-client@2.22.1(@types/dom-mediacapture-record@1.0.22))(tslib@2.8.1)':
     dependencies:
       '@floating-ui/dom': 1.7.6
-      livekit-client: 2.22.0(@types/dom-mediacapture-record@1.0.22)
+      livekit-client: 2.22.1(@types/dom-mediacapture-record@1.0.22)
       loglevel: 1.9.1
       rxjs: 7.8.2
       tslib: 2.8.1
 
-  '@livekit/components-react@2.9.24(livekit-client@2.22.0(@types/dom-mediacapture-record@1.0.22))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tslib@2.8.1)':
+  '@livekit/components-react@2.9.24(livekit-client@2.22.1(@types/dom-mediacapture-record@1.0.22))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tslib@2.8.1)':
     dependencies:
-      '@livekit/components-core': 0.12.15(livekit-client@2.22.0(@types/dom-mediacapture-record@1.0.22))(tslib@2.8.1)
+      '@livekit/components-core': 0.12.15(livekit-client@2.22.1(@types/dom-mediacapture-record@1.0.22))(tslib@2.8.1)
       clsx: 2.1.1
       events: 3.3.0
       jose: 6.2.8
-      livekit-client: 2.22.0(@types/dom-mediacapture-record@1.0.22)
+      livekit-client: 2.22.1(@types/dom-mediacapture-record@1.0.22)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       tslib: 2.8.1
@@ -3663,7 +3667,7 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  livekit-client@2.22.0(@types/dom-mediacapture-record@1.0.22):
+  livekit-client@2.22.1(@types/dom-mediacapture-record@1.0.22):
     dependencies:
       '@livekit/mutex': 1.1.1
       '@livekit/protocol': 1.50.4
@@ -3671,6 +3675,7 @@ snapshots:
       events: 3.3.0
       jose: 6.2.10
       loglevel: 1.9.2
+      machina: 7.0.1
       sdp-transform: 2.15.0
       tslib: 2.8.1
       typed-emitter: 2.1.0
@@ -3693,6 +3698,8 @@ snapshots:
       yallist: 3.1.1
 
   lz-string@1.5.0: {}
+
+  machina@7.0.1: {}
 
   magic-string@0.30.21:
     dependencies:
